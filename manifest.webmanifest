@@ -1,0 +1,23 @@
+{
+  "id": "./",
+  "name": "RL",
+  "short_name": "RL",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#190A60",
+  "theme_color": "#190A60",
+  "icons": [
+    {
+      "src": "./rl-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "./rl-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
