@@ -236,14 +236,17 @@ function wordPage(sheet,index) {
     '<w:spacing w:before="0" w:after="0" w:line="240" w:lineRule="auto"/><w:jc w:val="center"/></w:pPr>'+
     wordDrawing(id,width,height)+'</w:p>';
 }
-function wordDrawing(id,width,height) {
+function wordDrawing(id,width,height,formBackground=false) {
   const size='cx="'+width+'" cy="'+height+'"';
-  return '<w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0"><wp:extent '+size+'/>'+
+  const frame=formBackground
+    ? '<wp:anchor distT="0" distB="0" distL="0" distR="0" simplePos="0" relativeHeight="0" behindDoc="1" locked="1" layoutInCell="0" allowOverlap="1"><wp:simplePos x="0" y="0"/><wp:positionH relativeFrom="page"><wp:align>center</wp:align></wp:positionH><wp:positionV relativeFrom="paragraph"><wp:posOffset>304800</wp:posOffset></wp:positionV><wp:extent '+size+'/><wp:effectExtent l="0" t="0" r="0" b="0"/><wp:wrapNone/>'
+    : '<wp:inline distT="0" distB="0" distL="0" distR="0"><wp:extent '+size+'/>';
+  return '<w:r><w:drawing>'+frame+
     '<wp:docPr id="'+id+'" name="Imagem '+id+'"/><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">'+
     '<pic:pic><pic:nvPicPr><pic:cNvPr id="'+id+'" name="Imagem '+id+'"/><pic:cNvPicPr/></pic:nvPicPr>'+
     '<pic:blipFill><a:blip r:embed="rId'+id+'"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>'+
     '<pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext '+size+'/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom>'+
-    '</pic:spPr></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r>';
+    '</pic:spPr></pic:pic></a:graphicData></a:graphic>'+(formBackground?'</wp:anchor>':'</wp:inline>')+'</w:drawing></w:r>';
 }
 export function makeWord(sheets,pageImages,name) {
   const files = {}, links=[];
@@ -256,7 +259,7 @@ export function makeWord(sheets,pageImages,name) {
   return packageWord(files,links,body,name,'0');
 }
 
-export function makeEditableWord(report,fields,period,dateFormat,name) {
+export function makeEditableWord(report,period,dateFormat,name) {
   const files={}, links=[];
   const escape = value => String(value ?? '').replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g,'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&apos;'}[char]));
   function paragraph(value,{bold=false,color='190A60',size=20,page=false}={}) {
@@ -298,18 +301,78 @@ export function makeEditableWord(report,fields,period,dateFormat,name) {
     paragraph('REGISTRO DE EVIDÊNCIA',{bold:true,size:25})+paragraph('FORM-CORP-SMS-030 · GS2 – USO INTERNO · Rev.: 00',{size:16});
   const footer = () => paragraph('BRAVA ENERGIA',{bold:true,size:16})+
     paragraph('DOCUMENTOS IMPRESSOS SÃO CONSIDERADOS CÓPIAS NÃO CONTROLADAS',{size:15});
-  const fieldsRows=[];
-  for (let i=0;i<fields.length;i+=2) {
-    fieldsRows.push([fields[i],fields[i+1]].map(field=>{
-      if (!field) return cell(paragraph(''));
-      const [key,label]=field;
-      const value=report.details[key];
-      return cell(paragraph(label+': '+(key==='reportDate'?dateFormat(value):key==='evidence'?evidenceText(value):value??'')));
-    }).join(''));
+  const formWidths=[2700,1800,1800,3700];
+  const formRowHeights=[680,680,680,1000,800];
+  const details=report.details;
+  const field=key=>details[key]??'';
+  const pair=(left,right)=>[
+    {text:labels[left],bold:true},{text:field(left)},
+    {text:labels[right],bold:true},{text:right==='reportDate'?dateFormat(field(right)):field(right)}
+  ];
+  const formRows=[
+    pair('department','origin'),pair('reference','type'),pair('owner','reportDate'),
+    [{text:labels.evidence,bold:true},{text:evidenceText(field('evidence')),span:3}],
+    [{text:labels.summary+' '+field('summary'),span:2},{text:'Período: '+period,span:2}]
+  ];
+  const formSize=formRowHeights.reduce((sum,height)=>sum+height,0);
+  const formCanvas=document.createElement('canvas');
+  formCanvas.width=1000;
+  formCanvas.height=formSize/10;
+  const formContext=formCanvas.getContext('2d');
+  formContext.strokeStyle='#190A60';
+  formContext.lineWidth=2;
+  formContext.beginPath();
+  formContext.roundRect(1,1,998,formCanvas.height-2,14);
+  formContext.save();
+  formContext.clip();
+  let rowTop=0;
+  for (const [index,row] of formRows.entries()) {
+    const height=formRowHeights[index]/10;
+    let column=0, x=0;
+    for (const entry of row.slice(0,-1)) {
+      const next=column+(entry.span||1);
+      x+=formWidths.slice(column,next).reduce((sum,width)=>sum+width,0)/10;
+      column=next;
+      formContext.beginPath();
+      formContext.moveTo(x,rowTop);
+      formContext.lineTo(x,rowTop+height);
+      formContext.stroke();
+    }
+    rowTop+=height;
+    if (index<formRows.length-1) {
+      formContext.beginPath();
+      formContext.moveTo(0,rowTop);
+      formContext.lineTo(1000,rowTop);
+      formContext.stroke();
+    }
   }
+  formContext.restore();
+  formContext.beginPath();
+  formContext.roundRect(1,1,998,formCanvas.height-2,14);
+  formContext.stroke();
+  const formId=links.length+1;
+  files['word/media/moldura-formulario.png']=jpeg(formCanvas.toDataURL('image/png'));
+  links.push(relationship('rId'+formId,'image','media/moldura-formulario.png'));
+  const formTitle='<w:p><w:pPr><w:spacing w:before="0" w:after="0" w:line="480" w:lineRule="exact"/><w:jc w:val="center"/></w:pPr>'+
+    wordDrawing(formId,6350000,formSize*635,true)+'<w:r><w:rPr><w:b/></w:rPr><w:t>FORMULÁRIO</w:t></w:r></w:p>';
+  const hiddenBorders=['top','left','bottom','right','insideH','insideV'].map(side=>'<w:'+side+' w:val="nil"/>').join('');
+  const formGrid='<w:tbl><w:tblPr><w:tblW w:type="dxa" w:w="10000"/><w:jc w:val="center"/><w:tblBorders>'+hiddenBorders+
+    '</w:tblBorders><w:tblLayout w:type="fixed"/></w:tblPr><w:tblGrid>'+
+    formWidths.map(width=>'<w:gridCol w:w="'+width+'"/>').join('')+'</w:tblGrid>'+
+    formRows.map((row,index)=>{
+      let column=0;
+      return '<w:tr><w:trPr><w:cantSplit/><w:trHeight w:val="'+formRowHeights[index]+'" w:hRule="exact"/></w:trPr>'+
+        row.map(entry=>{
+          const span=entry.span||1;
+          const width=formWidths.slice(column,column+span).reduce((sum,value)=>sum+value,0);
+          column+=span;
+          return '<w:tc><w:tcPr><w:tcW w:type="dxa" w:w="'+width+'"/>'+(span>1?'<w:gridSpan w:val="'+span+'"/>':'')+
+            '<w:vAlign w:val="center"/></w:tcPr>'+paragraph(entry.text,{bold:entry.bold,size:18})+'</w:tc>';
+        }).join('')+'</w:tr>';
+    }).join('')+'</w:tbl>';
   const projects=projectProgress(report);
   const summary=projects.map(item=>paragraph(item.name+' · '+(item.value===null?'Não informado':item.value+'%')+' · '+item.count+' registros fotográficos')).join('');
-  const body=heading(false)+paragraph('FORMULÁRIO',{bold:true})+table(fieldsRows)+paragraph('Período: '+period)+
+  const body=heading(false)+formTitle+formGrid+
     paragraph('AVANÇO FÍSICO DOS PROJETOS',{bold:true})+summary+
     paragraph(projects.length+' atividades · '+report.pages.flat().filter(slot=>slot.image).length+' fotografias · '+projects.filter(item=>item.value===100).length+' concluídas')+footer()+
     report.pages.map(slots=>heading(true)+table([...evidencePair(slots[0],slots[1]),...evidencePair(slots[2],slots[3])])+footer()).join('');
