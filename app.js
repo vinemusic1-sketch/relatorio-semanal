@@ -1,6 +1,6 @@
 function projectProgress(report){const m=new Map();for(const s of report.pages.flat()){const name=s.activity?.trim();if(!name||s.progress==null||s.progress===''||!Number.isFinite(Number(s.progress)))continue;const k=name.toLocaleLowerCase('pt-BR');if(!m.has(k)||(s.date||'')>=m.get(k).date)m.set(k,{name,value:Number(s.progress),date:s.date||''});}return [...m.values()];}
-import { openCamera } from './camera.js?v=26';
-import { renderSheets, makePDF, makeWord } from './exports.js?v=26';
+import { openCamera } from './camera.js?v=27';
+import { renderSheets, makePDF, makeWord } from './exports.js?v=27';
 const $ = id => document.getElementById(id);
 const create = (tag, text) => {
   const element = document.createElement(tag);
@@ -248,7 +248,7 @@ async function readStamp(slot,report,photo,version,manual=false) {
   refreshSlot(slot);
   try {
     if(photo.stampDescription){state.text=photo.stampText||photo.stampDescription;if(!slot.description?.trim())userChange(slot,report,'description',photo.stampDescription);state.message='Descrição do carimbo preenchida.';return;}
-    const {readStampInfo} = await import('./stamp.js?v=26');
+    const {readStampInfo} = await import('./stamp.js?v=27');
     const result = await readStampInfo(photo,{places:savedOptions('place'),companies:savedOptions('company')});
     if (version !== state.version || slot.image !== photo) return;
     state.text = result.text;photo.stampText=result.text;persist(report);
