@@ -259,17 +259,29 @@ export function makeWord(sheets,pageImages,name) {
 export async function makeEditableWord(report,period,dateFormat,name) {
   const files={}, links=[];
   const escape = value => String(value ?? '').replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g,'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&apos;'}[char]));
-  function paragraph(value,{bold=false,color='190A60',size=20,page=false}={}) {
+  function paragraph(value,{bold=false,color='190A60',size=20,page=false,center=false,italic=false}={}) {
     const content=String(value ?? '').split('\n').map(line=>'<w:t xml:space="preserve">'+escape(line)+'</w:t>').join('<w:br/>');
-    return '<w:p><w:pPr>'+(page?'<w:pageBreakBefore/>':'')+'<w:spacing w:after="55" w:line="240" w:lineRule="auto"/></w:pPr><w:r><w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial"/>'+(bold?'<w:b/>':'')+'<w:color w:val="'+color+'"/><w:sz w:val="'+size+'"/></w:rPr>'+content+'</w:r></w:p>';
+    return '<w:p><w:pPr>'+(page?'<w:pageBreakBefore/>':'')+'<w:spacing w:after="55" w:line="240" w:lineRule="auto"/>'+(center?'<w:jc w:val="center"/>':'')+'</w:pPr><w:r><w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial"/>'+(bold?'<w:b/>':'')+(italic?'<w:i/>':'')+'<w:color w:val="'+color+'"/><w:sz w:val="'+size+'"/></w:rPr>'+content+'</w:r></w:p>';
   }
-  function cell(content,fill='FFFFFF') {
-    return '<w:tc><w:tcPr><w:tcW w:type="dxa" w:w="5000"/><w:shd w:val="clear" w:color="auto" w:fill="'+fill+'"/></w:tcPr>'+content+'</w:tc>';
+  const sides=['top','left','bottom','right','insideH','insideV'];
+  const border=side=>'<w:'+side+' w:val="single" w:sz="6" w:color="190A60"/>';
+  const blankBorder=side=>'<w:'+side+' w:val="nil"/>';
+  const frameWidth=10000, gutterWidth=180, photoWidth=(frameWidth-gutterWidth)/2;
+  function cell(content,fill='FFFFFF',width=photoWidth,gutter=false) {
+    const borders=gutter?'<w:tcBorders>'+sides.map(blankBorder).join('')+'</w:tcBorders>':'';
+    return '<w:tc><w:tcPr><w:tcW w:type="dxa" w:w="'+width+'"/>'+borders+
+      '<w:shd w:val="clear" w:color="auto" w:fill="'+fill+'"/><w:vAlign w:val="center"/></w:tcPr>'+content+'</w:tc>';
   }
-  function table(rows) {
-    const borders=['top','left','bottom','right','insideH','insideV'].map(side=>'<w:'+side+' w:val="single" w:sz="6" w:color="190A60"/>').join('');
-    return '<w:tbl><w:tblPr><w:tblW w:type="dxa" w:w="10000"/><w:tblBorders>'+borders+'</w:tblBorders><w:tblLayout w:type="fixed"/></w:tblPr><w:tblGrid><w:gridCol w:w="5000"/><w:gridCol w:w="5000"/></w:tblGrid>'+rows.map(row=>'<w:tr><w:trPr><w:cantSplit/></w:trPr>'+row+'</w:tr>').join('')+'</w:tbl>';
+  function table(rows,widths,innerLines=true) {
+    const borders=sides.map(side=>!innerLines&&side.startsWith('inside')?blankBorder(side):border(side)).join('');
+    return '<w:tbl><w:tblPr><w:tblW w:type="dxa" w:w="'+frameWidth+'"/><w:jc w:val="center"/><w:tblBorders>'+
+      borders+'</w:tblBorders><w:tblLayout w:type="fixed"/><w:tblCellMar><w:top w:w="45" w:type="dxa"/><w:left w:w="95" w:type="dxa"/>'+
+      '<w:bottom w:w="45" w:type="dxa"/><w:right w:w="95" w:type="dxa"/></w:tblCellMar></w:tblPr><w:tblGrid>'+
+      widths.map(width=>'<w:gridCol w:w="'+width+'"/>').join('')+'</w:tblGrid>'+
+      rows.map(row=>'<w:tr><w:trPr><w:cantSplit/></w:trPr>'+row+'</w:tr>').join('')+'</w:tbl>';
   }
+  const gap=()=>'<w:p><w:pPr><w:spacing w:line="160" w:lineRule="exact"/></w:pPr></w:p>';
+  const gutter=()=>cell(gap(),'FFFFFF',gutterWidth,true);
   async function photo(image) {
     const canvas=document.createElement('canvas');
     canvas.width=900;
@@ -307,12 +319,16 @@ export async function makeEditableWord(report,period,dateFormat,name) {
     const description = slot => paragraph(slot.description)+
       (progress('Serviço',slot.serviceProgress)?paragraph(progress('Serviço',slot.serviceProgress),{size:17}):'');
     const [leftPhoto,rightPhoto]=await Promise.all([photo(left.image),photo(right.image)]);
-    return [cell(metadata(left),'190A60')+cell(metadata(right),'190A60'),
-      cell(leftPhoto)+cell(rightPhoto),
-      cell(description(left),'CEFF00')+cell(description(right),'CEFF00')];
+    return [cell(metadata(left),'190A60')+gutter()+cell(metadata(right),'190A60'),
+      cell(leftPhoto)+gutter()+cell(rightPhoto),
+      cell(description(left),'CEFF00')+gutter()+cell(description(right),'CEFF00')];
   }
-  const heading = page => paragraph('BRAVA Energia',{bold:true,size:36,page})+
-    paragraph('REGISTRO DE EVIDÊNCIA',{bold:true,size:25})+paragraph('FORM-CORP-SMS-030 · GS2 – USO INTERNO · Rev.: 00',{size:16});
+  const heading=()=>table([
+    cell(paragraph('BRAVA',{bold:true,italic:true,size:48})+paragraph('energia',{size:17}),'FFFFFF',2500)+
+    cell(paragraph('REGISTRO DE EVIDÊNCIA',{bold:true,size:24,center:true}),'FFFFFF',4700)+
+    cell(paragraph('FORM-CORP-SMS-030',{bold:true,size:16,center:true})+
+      paragraph('GS2 – USO INTERNO',{size:16,center:true})+paragraph('Rev.: 00',{size:16,center:true}),'FFFFFF',2800)
+  ],[2500,4700,2800],false)+gap();
   const footer = () => paragraph('BRAVA ENERGIA',{bold:true,size:16})+
     paragraph('DOCUMENTOS IMPRESSOS SÃO CONSIDERADOS CÓPIAS NÃO CONTROLADAS',{size:15});
   const formWidths=[2700,1800,1800,3700];
@@ -347,16 +363,26 @@ export async function makeEditableWord(report,period,dateFormat,name) {
         }).join('')+'</w:tr>';
     }).join('')+'</w:tbl>';
   const projects=projectProgress(report);
-  const summary=projects.map(item=>paragraph(item.name+' · '+(item.value===null?'Não informado':item.value+'%')+' · '+item.count+' registros fotográficos')).join('');
+  const projectRows=projects.map(item=>{
+    const percent=item.value===null?'Não informado':item.value+'%';
+    const count=Math.max(0,Math.min(20,Math.round((item.value??0)/5)));
+    const bar=item.value===null?'':paragraph('■'.repeat(count),{color:'507200',size:15});
+    return paragraph(item.name+' · '+percent,{bold:true})+bar+
+      paragraph(item.count+' registros fotográficos',{size:17,color:'595568'});
+  }).join('')||paragraph('Nenhuma atividade registrada.',{center:true});
+  const totals=projects.length+' atividades   ·   '+report.pages.flat().filter(slot=>slot.image).length+
+    ' fotografias   ·   '+projects.filter(item=>item.value===100).length+' concluídas';
+  const summary=table([
+    cell(paragraph('AVANÇO FÍSICO DOS PROJETOS',{bold:true,center:true})+projectRows+
+      paragraph(totals,{bold:true,center:true}),'F7F7FA',frameWidth)
+  ],[frameWidth],false);
   const pageBreak='<w:p><w:pPr><w:spacing w:before="0" w:after="0"/></w:pPr><w:r><w:br w:type="page"/></w:r></w:p>';
   const evidencePages=await Promise.all(report.pages.map(async slots=>{
     const [top,bottom]=await Promise.all([evidencePair(slots[0],slots[1]),evidencePair(slots[2],slots[3])]);
-    return pageBreak+heading(false)+table([...top,...bottom])+footer();
+    const columns=[photoWidth,gutterWidth,photoWidth];
+    return pageBreak+heading()+table(top,columns)+gap()+table(bottom,columns)+gap()+footer();
   }));
-  const body=heading(false)+formTitle+formGrid+
-    paragraph('AVANÇO FÍSICO DOS PROJETOS',{bold:true})+summary+
-    paragraph(projects.length+' atividades · '+report.pages.flat().filter(slot=>slot.image).length+' fotografias · '+projects.filter(item=>item.value===100).length+' concluídas')+footer()+
-    evidencePages.join('');
+  const body=heading()+formTitle+formGrid+gap()+summary+gap()+footer()+evidencePages.join('');
   return packageWord(files,links,body,name,'700');
 }
 
