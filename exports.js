@@ -273,7 +273,7 @@ function wordDrawing(id,width,height,name,position) {
 }
 function wordAnchor(id,width,height,position) {
   const size='cx="'+width+'" cy="'+height+'"';
-  return '<wp:anchor distT="0" distB="0" distL="0" distR="0" simplePos="0" relativeHeight="'+id+'" behindDoc="0" locked="0" layoutInCell="0" allowOverlap="1"><wp:simplePos x="0" y="0"/><wp:positionH relativeFrom="page"><wp:posOffset>'+position.x+'</wp:posOffset></wp:positionH><wp:positionV relativeFrom="page"><wp:posOffset>'+position.y+'</wp:posOffset></wp:positionV><wp:extent '+size+'/><wp:effectExtent l="0" t="0" r="0" b="0"/><wp:wrapNone/>';
+  return '<wp:anchor distT="0" distB="0" distL="0" distR="0" simplePos="0" relativeHeight="'+id+'" behindDoc="'+(position.background?'1':'0')+'" locked="0" layoutInCell="0" allowOverlap="1"><wp:simplePos x="0" y="0"/><wp:positionH relativeFrom="page"><wp:posOffset>'+position.x+'</wp:posOffset></wp:positionH><wp:positionV relativeFrom="page"><wp:posOffset>'+position.y+'</wp:posOffset></wp:positionV><wp:extent '+size+'/><wp:effectExtent l="0" t="0" r="0" b="0"/><wp:wrapNone/>';
 }
 function xmlText(value) {
   return value.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g,'')
@@ -286,12 +286,15 @@ function wordTextBox(id,text,scale,position) {
   const align=['center','right'].includes(text.align)?text.align:'left';
   const color=typeof text.color==='string' && /^#[a-f0-9]{6}$/i.test(text.color)?text.color.slice(1):'000000';
   const content=text.value.split('\n').map(line=>'<w:t xml:space="preserve">'+xmlText(line)+'</w:t>').join('<w:br/>');
-  return '<w:r><w:drawing>'+wordAnchor(id,width,height,position)+'<wp:docPr id="'+id+'" name="Texto '+id+'"/><wp:cNvGraphicFramePr/>'+
-    '<a:graphic><a:graphicData uri="http://schemas.microsoft.com/office/word/2010/wordprocessingShape"><wps:wsp><wps:cNvSpPr txBox="1"/>'+
-    '<wps:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="'+width+'" cy="'+height+'"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:noFill/><a:ln><a:noFill/></a:ln></wps:spPr>'+
-    '<wps:txbx><w:txbxContent><w:p><w:pPr><w:spacing w:before="0" w:after="0" w:line="'+Math.round(text.lineHeight*scale/635)+'" w:lineRule="exact"/><w:jc w:val="'+align+'"/></w:pPr>'+
+  const points=emu=>(emu/12700).toFixed(3)+'pt';
+  const style='position:absolute;margin-left:'+points(position.x)+';margin-top:'+points(position.y)+
+    ';width:'+points(width)+';height:'+points(height)+';z-index:'+(251659264+id)+
+    ';mso-position-horizontal-relative:page;mso-position-vertical-relative:page;mso-wrap-style:none';
+  return '<w:r><w:pict><v:rect id="Texto'+id+'" style="'+style+'" filled="f" stroked="f">'+
+    '<v:textbox inset="0,0,0,0"><w:txbxContent><w:p><w:pPr><w:spacing w:before="0" w:after="0" w:line="'+Math.round(text.lineHeight*scale/635)+'" w:lineRule="exact"/><w:jc w:val="'+align+'"/></w:pPr>'+
     '<w:r><w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial"/>'+(text.bold?'<w:b/>':'')+(text.italic?'<w:i/>':'')+'<w:color w:val="'+color+'"/><w:sz w:val="'+size+'"/></w:rPr>'+content+
-    '</w:r></w:p></w:txbxContent></wps:txbx><wps:bodyPr wrap="square" lIns="0" tIns="0" rIns="0" bIns="0" anchor="t"><a:noAutofit/></wps:bodyPr></wps:wsp></a:graphicData></a:graphic></wp:anchor></w:drawing></w:r>';
+    '</w:r></w:p></w:txbxContent></v:textbox><w10:wrap type="none" anchorx="page" anchory="page"/></v:rect></w:pict></w:r>';
+
 }
 export function makeWord(sheets,pageImages,name) {
   const files = {}, links=[];
@@ -324,7 +327,7 @@ export function makeEditableWord(pages,name) {
     const artworkHeight=canvas.height*scale;
     const x=Math.round((pageWidth-artworkWidth)/2);
     const y=Math.round((pageHeight-artworkHeight)/2);
-    const background=drawing(canvas.toDataURL('image/png'),'moldura',artworkWidth,artworkHeight,{x,y});
+    const background=drawing(canvas.toDataURL('image/png'),'moldura',artworkWidth,artworkHeight,{x,y,background:true});
     const pictures=photos.map(photo=>drawing(photo.url,'foto',photo.width*scale,photo.height*scale,{
       x:Math.round(x+photo.x*scale),y:Math.round(y+photo.y*scale)
     })).join('');
@@ -337,7 +340,7 @@ export function makeEditableWord(pages,name) {
 }
 
 function packageWord(files,links,body,name,margin) {
-  files['word/document.xml']='<w:document xmlns:wps="http://schemas.microsoft.com/office/word/2010/wordprocessingShape" xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"><w:body>'+body+'<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="'+margin+'" w:right="'+margin+'" w:bottom="'+margin+'" w:left="'+margin+'" w:header="0" w:footer="0" w:gutter="0"/></w:sectPr></w:body></w:document>';
+  files['word/document.xml']='<w:document xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w10="urn:schemas-microsoft-com:office:word" xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"><w:body>'+body+'<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="'+margin+'" w:right="'+margin+'" w:bottom="'+margin+'" w:left="'+margin+'" w:header="0" w:footer="0" w:gutter="0"/></w:sectPr></w:body></w:document>';
   files['word/_rels/document.xml.rels']=relationships(links.join(''));
   files['_rels/.rels']=relationships(relationship('rId1','officeDocument','word/document.xml'));
   files['[Content_Types].xml']='<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Default Extension="png" ContentType="image/png"/><Default Extension="jpg" ContentType="image/jpeg"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>';
