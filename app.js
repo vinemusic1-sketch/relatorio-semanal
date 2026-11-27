@@ -1,6 +1,5 @@
-function projectProgress(report){const m=new Map();for(const s of report.pages.flat()){const name=s.activity?.trim();if(!name)continue;const k=name.normalize('NFD').replace(/\p{M}/gu,'').toLocaleLowerCase('pt-BR').replace(/\s+/g,' ');const item=m.get(k)||{name,value:null,date:'',updated:0,count:0};if(s.image)item.count++;const valid=s.progress!=null&&String(s.progress).trim()!==''&&Number.isFinite(Number(s.progress));const updated=s.progressUpdated||0;if(valid&& (item.value===null||updated>item.updated||updated===item.updated&&(s.date||'')>=item.date)){item.value=Math.max(0,Math.min(100,Number(s.progress)));item.date=s.date||'';item.updated=updated;}m.set(k,item);}return [...m.values()];}
 import { openCamera } from './camera.js?v=29';
-import { renderSheets, makePDF, makeWord, makeEditableWord } from './exports.js?v=42';
+import { renderSheets, makePDF, makeWord, makeEditableWord, projectProgress } from './exports.js?v=43';
 const $ = id => document.getElementById(id);
 const create = (tag, text) => {
   const element = document.createElement(tag);
@@ -629,7 +628,7 @@ $('view').onclick = async () => {
     await Promise.all(pending);
     const report = structuredClone(current);
     while (report.pages.length > 1 && report.pages.at(-1).every(slot =>
-      !slot.image && ![slot.date,slot.company,slot.place,slot.description,slot.activity,slot.progress,slot.serviceProgress].some(value => value?.trim()))) {
+      !slot.image && ![slot.date,slot.company,slot.place,slot.description,slot.activity,slot.progress,slot.serviceProgress].some(value => String(value ?? '').trim()))) {
       report.pages.pop();
     }
     const name = 'Relatorio-Semanal-'+report.start;

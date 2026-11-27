@@ -1,4 +1,4 @@
-function projectProgress(report){const m=new Map();for(const s of report.pages.flat()){const name=s.activity?.trim();if(!name)continue;const k=name.normalize('NFD').replace(/\p{M}/gu,'').toLocaleLowerCase('pt-BR').replace(/\s+/g,' ');const item=m.get(k)||{name,value:null,date:'',updated:0,count:0};if(s.image)item.count++;const valid=s.progress!=null&&String(s.progress).trim()!==''&&Number.isFinite(Number(s.progress));const updated=s.progressUpdated||0;if(valid&& (item.value===null||updated>item.updated||updated===item.updated&&(s.date||'')>=item.date)){item.value=Math.max(0,Math.min(100,Number(s.progress)));item.date=s.date||'';item.updated=updated;}m.set(k,item);}return [...m.values()];}
+export function projectProgress(report){const m=new Map();for(const s of report.pages.flat()){const activity=s.activity?.trim(), location=s.place?.trim();const hasProgress=s.progress!=null&&String(s.progress).trim()!==''&&Number.isFinite(Number(s.progress));if(!activity&&!hasProgress)continue;const name=activity||(location?'Sem atividade · '+location:'Sem atividade identificada');const k=(activity?"activity:":"unassigned:")+name.normalize('NFD').replace(/\p{M}/gu,'').toLocaleLowerCase('pt-BR').replace(/\s+/g,' ');const item=m.get(k)||{name,value:null,date:'',updated:0,count:0};if(s.image)item.count++;const valid=s.progress!=null&&String(s.progress).trim()!==''&&Number.isFinite(Number(s.progress));const updated=s.progressUpdated||0;if(valid&& (item.value===null||updated>item.updated||updated===item.updated&&(s.date||'')>=item.date)){item.value=Math.max(0,Math.min(100,Number(s.progress)));item.date=s.date||'';item.updated=updated;}m.set(k,item);}return [...m.values()];}
 const encoder = new TextEncoder();
 const bytes = value => encoder.encode(value);
 const jpeg = url => Uint8Array.from(atob(url.split(',')[1]), character => character.charCodeAt(0));
@@ -323,12 +323,13 @@ export async function makeEditableWord(report,period,dateFormat,name) {
       cell(leftPhoto)+gutter()+cell(rightPhoto),
       cell(description(left),'CEFF00')+gutter()+cell(description(right),'CEFF00')];
   }
-  const heading=()=>table([
-    cell(paragraph('BRAVA',{bold:true,italic:true,size:48})+paragraph('energia',{size:17}),'FFFFFF',2500)+
-    cell(paragraph('REGISTRO DE EVIDÊNCIA',{bold:true,size:24,center:true}),'FFFFFF',4700)+
+  const headerCells=[
+    cell(paragraph('BRAVA',{bold:true,italic:true,size:48})+paragraph('energia',{size:17}),'FFFFFF',2500),
+    cell(paragraph('REGISTRO DE EVIDÊNCIA',{bold:true,size:24,center:true}),'FFFFFF',4700),
     cell(paragraph('FORM-CORP-SMS-030',{bold:true,size:16,center:true})+
       paragraph('GS2 – USO INTERNO',{size:16,center:true})+paragraph('Rev.: 00',{size:16,center:true}),'FFFFFF',2800)
-  ],[2500,4700,2800],false)+gap();
+  ];
+  const heading=()=>table([headerCells.join('')],[2500,4700,2800],false)+gap();
   const footer = () => paragraph('BRAVA ENERGIA',{bold:true,size:16})+
     paragraph('DOCUMENTOS IMPRESSOS SÃO CONSIDERADOS CÓPIAS NÃO CONTROLADAS',{size:15});
   const formWidths=[2700,1800,1800,3700];
@@ -344,14 +345,14 @@ export async function makeEditableWord(report,period,dateFormat,name) {
     [{text:labels.evidence,bold:true},{text:evidenceText(field('evidence')),span:3}],
     [{text:labels.summary+' '+field('summary'),span:2},{text:'Período: '+period,span:2}]
   ];
-  const formTitle=paragraph('FORMULÁRIO',{bold:true});
+  const formTitle=paragraph('FORMULÁRIO',{bold:true,center:true});
   const formBorders=['top','left','bottom','right','insideH','insideV'].map(side=>
     '<w:'+side+' w:val="single" w:sz="6" w:color="190A60"/>'
   ).join('');
-  const formGrid='<w:tbl><w:tblPr><w:tblW w:type="dxa" w:w="10000"/><w:jc w:val="center"/><w:tblBorders>'+formBorders+
+  const formGridStart='<w:tbl><w:tblPr><w:tblW w:type="dxa" w:w="10000"/><w:jc w:val="center"/><w:tblBorders>'+formBorders+
     '</w:tblBorders><w:tblLayout w:type="fixed"/></w:tblPr><w:tblGrid>'+
-    formWidths.map(width=>'<w:gridCol w:w="'+width+'"/>').join('')+'</w:tblGrid>'+
-    formRows.map((row,index)=>{
+    formWidths.map(width=>'<w:gridCol w:w="'+width+'"/>').join('')+'</w:tblGrid>';
+  const formGridRows=formRows.map((row,index)=>{
       let column=0;
       return '<w:tr><w:trPr><w:cantSplit/><w:trHeight w:val="'+formRowHeights[index]+'" w:hRule="atLeast"/></w:trPr>'+
         row.map(entry=>{
@@ -361,7 +362,7 @@ export async function makeEditableWord(report,period,dateFormat,name) {
           return '<w:tc><w:tcPr><w:tcW w:type="dxa" w:w="'+width+'"/>'+(span>1?'<w:gridSpan w:val="'+span+'"/>':'')+
             '<w:vAlign w:val="center"/></w:tcPr>'+paragraph(entry.text,{bold:entry.bold,size:18})+'</w:tc>';
         }).join('')+'</w:tr>';
-    }).join('')+'</w:tbl>';
+    }).join('');
   const projects=projectProgress(report);
   const projectRows=projects.map(item=>{
     const percent=item.value===null?'Não informado':item.value+'%';
@@ -372,17 +373,22 @@ export async function makeEditableWord(report,period,dateFormat,name) {
   }).join('')||paragraph('Nenhuma atividade registrada.',{center:true});
   const totals=projects.length+' atividades   ·   '+report.pages.flat().filter(slot=>slot.image).length+
     ' fotografias   ·   '+projects.filter(item=>item.value===100).length+' concluídas';
-  const summary=table([
-    cell(paragraph('AVANÇO FÍSICO DOS PROJETOS',{bold:true,center:true})+projectRows+
-      paragraph(totals,{bold:true,center:true}),'F7F7FA',frameWidth)
-  ],[frameWidth],false);
+  const mergedCell=(content,fill,width,span)=>cell(content,fill,width)
+    .replace(/(<w:tcW[^>]+\/>)/,'$1<w:gridSpan w:val="'+span+'"/>');
+  const fullRow=(content,fill='FFFFFF')=>'<w:tr>'+mergedCell(content,fill,frameWidth,4)+'</w:tr>';
+  const headerRow='<w:tr>'+headerCells[0].replace('w:w="2500"','w:w="2700"')+
+    headerCells[1].replace('<w:tcW w:type="dxa" w:w="4700"/>','<w:tcW w:type="dxa" w:w="3600"/><w:gridSpan w:val="2"/>')+
+    headerCells[2].replace('w:w="2800"','w:w="3700"')+'</w:tr>';
+  const summary=fullRow(paragraph('AVANÇO FÍSICO DOS PROJETOS',{bold:true,center:true})+projectRows+
+    paragraph(totals,{bold:true,center:true}),'F7F7FA');
+  const firstPage=formGridStart+headerRow+fullRow(formTitle)+formGridRows+summary+'</w:tbl>';
   const pageBreak='<w:p><w:pPr><w:spacing w:before="0" w:after="0"/></w:pPr><w:r><w:br w:type="page"/></w:r></w:p>';
   const evidencePages=await Promise.all(report.pages.map(async slots=>{
     const [top,bottom]=await Promise.all([evidencePair(slots[0],slots[1]),evidencePair(slots[2],slots[3])]);
     const columns=[photoWidth,gutterWidth,photoWidth];
     return pageBreak+heading()+table(top,columns)+gap()+table(bottom,columns)+gap()+footer();
   }));
-  const body=heading()+formTitle+formGrid+gap()+summary+gap()+footer()+evidencePages.join('');
+  const body=firstPage+gap()+footer()+evidencePages.join('');
   return packageWord(files,links,body,name,'700');
 }
 
