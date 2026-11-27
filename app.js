@@ -1,6 +1,6 @@
 function projectProgress(report){const m=new Map();for(const s of report.pages.flat()){const name=s.activity?.trim();if(!name||s.progress==null||s.progress===''||!Number.isFinite(Number(s.progress)))continue;const k=name.toLocaleLowerCase('pt-BR');if(!m.has(k)||(s.date||'')>=m.get(k).date)m.set(k,{name,value:Number(s.progress),date:s.date||''});}return [...m.values()];}
-import { openCamera } from './camera.js?v=23';
-import { renderSheets, makePDF, makeWord } from './exports.js?v=23';
+import { openCamera } from './camera.js?v=24';
+import { renderSheets, makePDF, makeWord } from './exports.js?v=24';
 const $ = id => document.getElementById(id);
 const create = (tag, text) => {
   const element = document.createElement(tag);
@@ -495,7 +495,7 @@ function formBlock(report) {
       cell('Tipo de Evidência:','l'),cell('( X ) '+(d.evidence || 'Foto / Imagem'),'span3'),
       cell('Descrição da ação: '+(d.summary || ''),'span2'),cell('Período: de '+period(report.start),'span2'));
   };
-  const chart=create('div');chart.className='lp-project-chart';const refresh=()=>{const data=projectProgress(report);chart.hidden=!data.length;chart.replaceChildren(create('b','AVANÇO FÍSICO DOS PROJETOS'));for(const item of data){const row=create('div');const track=create('span');track.className='lp-progress-track';const fill=create('span');fill.className='lp-progress-fill';fill.style.width=item.value+'%';track.append(fill);row.append(create('span',item.name),track,create('b',item.value+'%'));chart.append(row);}};formUpdater=()=>{update();refresh();};
+  const chart=create('div');chart.className='lp-project-chart';const refresh=()=>{const data=projectProgress(report);chart.hidden=false;chart.replaceChildren(create('b','AVANÇO FÍSICO DOS PROJETOS'));if(!data.length){const empty=create('p','Nenhum avanço informado neste período.');empty.className='lp-chart-empty';chart.append(empty);}for(const item of data){const row=create('div');const track=create('span');track.className='lp-progress-track';const fill=create('span');fill.className='lp-progress-fill';fill.style.width=item.value+'%';track.append(fill);row.append(create('span',item.name),track,create('b',item.value+'%'));chart.append(row);}};formUpdater=()=>{update();refresh();};
   update();
   refresh();const group=create('div');group.append(wrap,chart);return group;
 }
