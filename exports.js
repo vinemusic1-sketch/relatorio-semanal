@@ -329,7 +329,6 @@ export async function makeEditableWord(report,period,dateFormat,name) {
     cell(paragraph('FORM-CORP-SMS-030',{bold:true,size:16,center:true})+
       paragraph('GS2 – USO INTERNO',{size:16,center:true})+paragraph('Rev.: 00',{size:16,center:true}),'FFFFFF',2800)
   ];
-  const heading=()=>table([headerCells.join('')],[2500,4700,2800],false)+gap();
   const footer = () => paragraph('BRAVA ENERGIA',{bold:true,size:16})+
     paragraph('DOCUMENTOS IMPRESSOS SÃO CONSIDERADOS CÓPIAS NÃO CONTROLADAS',{size:15});
   const formWidths=[2700,1800,1800,3700];
@@ -350,7 +349,7 @@ export async function makeEditableWord(report,period,dateFormat,name) {
     '<w:'+side+' w:val="single" w:sz="6" w:color="190A60"/>'
   ).join('');
   const formGridStart='<w:tbl><w:tblPr><w:tblW w:type="dxa" w:w="10000"/><w:jc w:val="center"/><w:tblBorders>'+formBorders+
-    '</w:tblBorders><w:tblLayout w:type="fixed"/></w:tblPr><w:tblGrid>'+
+    '</w:tblBorders><w:tblLayout w:type="fixed"/><w:tblCellMar><w:left w:w="95" w:type="dxa"/><w:right w:w="95" w:type="dxa"/></w:tblCellMar></w:tblPr><w:tblGrid>'+
     formWidths.map(width=>'<w:gridCol w:w="'+width+'"/>').join('')+'</w:tblGrid>';
   const formGridRows=formRows.map((row,index)=>{
       let column=0;
@@ -386,7 +385,14 @@ export async function makeEditableWord(report,period,dateFormat,name) {
   const evidencePages=await Promise.all(report.pages.map(async slots=>{
     const [top,bottom]=await Promise.all([evidencePair(slots[0],slots[1]),evidencePair(slots[2],slots[3])]);
     const columns=[photoWidth,gutterWidth,photoWidth];
-    return pageBreak+heading()+table(top,columns)+gap()+table(bottom,columns)+gap()+footer();
+    const heading=mergedCell(
+      paragraph('BRAVA Energia',{bold:true,italic:true,size:38,center:true})+
+      paragraph('REGISTRO DE EVIDÊNCIA',{bold:true,size:24,center:true})+
+      paragraph('FORM-CORP-SMS-030  ·  GS2 – USO INTERNO  ·  Rev.: 00',{size:16,center:true}),
+      'FFFFFF',frameWidth,3
+    );
+    const spacer=mergedCell(gap(),'FFFFFF',frameWidth,3);
+    return pageBreak+table([heading,...top,spacer,...bottom],columns)+gap()+footer();
   }));
   const body=firstPage+gap()+footer()+evidencePages.join('');
   return packageWord(files,links,body,name,'700');
