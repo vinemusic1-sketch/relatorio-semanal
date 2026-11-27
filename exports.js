@@ -27,10 +27,6 @@ function lines(ctx, text, width) {
   return result;
 }
 function wrap(ctx, text, x, y, width, lineHeight, maximum) {
-  if (ctx.recordWordText) {
-    ctx.recordWordText(String(text ?? ''),x,y,width,lineHeight,maximum);
-    return;
-  }
   const all = lines(ctx,text,width);
   for (let index=0; index<Math.min(all.length,maximum); index++) {
     const ellipsis = index === maximum-1 && all.length > maximum ? '…' : '';
@@ -46,28 +42,13 @@ function evidenceText(selected) {
     ' '+mark(!known && chosen)+'Outro:'+(known || !chosen ? '' : ' '+selected);
 }
 
-export async function renderSheets(report, fields, period, dateFormat, separatePhotos=false) {
+export async function renderSheets(report, fields, period, dateFormat) {
   // Mantém 4 fotos por página, em duas linhas de duas fotos, como no FORM-CORP-SMS-030.
   const total = report.pages.length+1;
   return Promise.all([null,...report.pages].map(async (slots,pageIndex) => {
     const canvas = document.createElement('canvas');
     canvas.width=W; canvas.height=H;
     const ctx=canvas.getContext('2d');
-    const photos=[], wordText=[];
-    if (separatePhotos) {
-      ctx.recordWordText = (value,x,y,max,lineHeight,lineCount=1) => {
-        value=String(value ?? '');
-        const metrics=ctx.measureText(value);
-        const size=Number(/([\d.]+)px/.exec(ctx.font)?.[1]||18);
-        const align=ctx.textAlign;
-        const width=Math.max(12,max??metrics.width+size*.65);
-        const left=align==='center'?x-width/2:align==='right'?x-width:x;
-        wordText.push({value,x:left,y:y-(metrics.fontBoundingBoxAscent||size*.9),width,
-          height:lineHeight?lineHeight*lineCount:size*1.3,lineHeight:lineHeight||size*1.2,
-          align,size,color:ctx.fillStyle,bold:ctx.font.includes('bold'),italic:ctx.font.includes('italic')});
-      };
-      ctx.fillText=ctx.recordWordText;
-    }
     ctx.fillStyle='#fff'; ctx.fillRect(0,0,W,H);
     ctx.textBaseline='alphabetic';
     const font = (size,bold=false,italic=false) => { ctx.font=(italic?'italic ':'')+(bold?'bold ':'')+size+'px Arial, Helvetica, sans-serif'; };
@@ -84,11 +65,7 @@ export async function renderSheets(report, fields, period, dateFormat, separateP
       font(size); ctx.fillStyle=color;
       const widths=[...content].map(c => ctx.measureText(c).width+gap);
       let x=cx-widths.reduce((a,b) => a+b,0)/2;
-      if (ctx.recordWordText) {
-        ctx.recordWordText(content,cx-widths.reduce((a,b)=>a+b,0)/2,y,widths.reduce((a,b)=>a+b,0));
-      } else {
-        [...content].forEach((c,i) => { ctx.fillText(c,x,y); x+=widths[i]; });
-      }
+      [...content].forEach((c,i) => { ctx.fillText(c,x,y); x+=widths[i]; });
     }
 
     // Cabeçalho de página
@@ -189,9 +166,7 @@ export async function renderSheets(report, fields, period, dateFormat, separateP
           await img.decode();
           const ratio=Math.min((w-16)/img.width,(ph-16)/img.height);
           const iw=img.width*ratio, ih=img.height*ratio;
-          const imageX=x+(w-iw)/2, imageY=ty+band+(ph-ih)/2;
-          if (separatePhotos) photos.push({url:slot.image.url,x:imageX,y:imageY,width:iw,height:ih});
-          else ctx.drawImage(img,imageX,imageY,iw,ih);
+          ctx.drawImage(img,x+(w-iw)/2,ty+band+(ph-ih)/2,iw,ih);
         }
         ctx.restore();
         rounded(x,ty,w,h,radius); ctx.strokeStyle=navyBlue; ctx.lineWidth=2; ctx.stroke();
@@ -222,7 +197,7 @@ export async function renderSheets(report, fields, period, dateFormat, separateP
     text('BRAVA ENERGIA',150,1682,18,{bold:true,color:navy});
     text('Pág. '+(pageIndex+1)+' de '+total,1090,1682,18,{bold:true,color:navy,align:'right'});
     spaced('DOCUMENTOS IMPRESSOS SÃO CONSIDERADOS CÓPIAS NÃO CONTROLADAS',W/2,1730,14,'#8C8C99',3);
-    return separatePhotos ? {canvas,photos,wordText} : canvas;
+    return canvas;
   }));
 }
 
@@ -253,48 +228,22 @@ export async function makePDF(sheets,name) {
 
 const relationship = (id,type,target) => '<Relationship Id="'+id+'" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/'+type+'" Target="'+target+'"/>';
 const relationships = content => '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'+content+'</Relationships>';
-function wordPage(sheet,index,width=7450000) {
+function wordPage(sheet,index) {
   const id=index+1;
+  const width=7450000;
   const height=Math.round(width*sheet.height/sheet.width);
   return '<w:p><w:pPr>'+(index ? '<w:pageBreakBefore/>' : '')+
     '<w:spacing w:before="0" w:after="0" w:line="240" w:lineRule="auto"/><w:jc w:val="center"/></w:pPr>'+
-    wordDrawing(id,width,height,'Pagina-'+id+'.png')+'</w:p>';
+    wordDrawing(id,width,height)+'</w:p>';
 }
-function wordDrawing(id,width,height,name,position) {
+function wordDrawing(id,width,height) {
   const size='cx="'+width+'" cy="'+height+'"';
-  const frame=position ? wordAnchor(id,width,height,position)
-    : '<wp:inline distT="0" distB="0" distL="0" distR="0"><wp:extent '+size+'/>';
-  return '<w:r><w:drawing>'+frame+
-    '<wp:docPr id="'+id+'" name="'+name+'"/><wp:cNvGraphicFramePr/><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">'+
-    '<pic:pic><pic:nvPicPr><pic:cNvPr id="'+id+'" name="'+name+'"/><pic:cNvPicPr/></pic:nvPicPr>'+
+  return '<w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0"><wp:extent '+size+'/>'+
+    '<wp:docPr id="'+id+'" name="Imagem '+id+'"/><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">'+
+    '<pic:pic><pic:nvPicPr><pic:cNvPr id="'+id+'" name="Imagem '+id+'"/><pic:cNvPicPr/></pic:nvPicPr>'+
     '<pic:blipFill><a:blip r:embed="rId'+id+'"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>'+
     '<pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext '+size+'/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom>'+
-    '</pic:spPr></pic:pic></a:graphicData></a:graphic>'+(position?'</wp:anchor>':'</wp:inline>')+'</w:drawing></w:r>';
-}
-function wordAnchor(id,width,height,position) {
-  const size='cx="'+width+'" cy="'+height+'"';
-  return '<wp:anchor distT="0" distB="0" distL="0" distR="0" simplePos="0" relativeHeight="'+id+'" behindDoc="'+(position.background?'1':'0')+'" locked="0" layoutInCell="0" allowOverlap="1"><wp:simplePos x="0" y="0"/><wp:positionH relativeFrom="page"><wp:posOffset>'+position.x+'</wp:posOffset></wp:positionH><wp:positionV relativeFrom="page"><wp:posOffset>'+position.y+'</wp:posOffset></wp:positionV><wp:extent '+size+'/><wp:effectExtent l="0" t="0" r="0" b="0"/><wp:wrapNone/>';
-}
-function xmlText(value) {
-  return value.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g,'')
-    .replace(/[&<>]/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[char]));
-}
-function wordTextBox(id,text,scale,position) {
-  const width=Math.round(Math.max(text.width,12)*scale);
-  const height=Math.round(text.height*scale);
-  const size=Math.max(1,Math.round(text.size*scale/6350));
-  const align=['center','right'].includes(text.align)?text.align:'left';
-  const color=typeof text.color==='string' && /^#[a-f0-9]{6}$/i.test(text.color)?text.color.slice(1):'000000';
-  const content=text.value.split('\n').map(line=>'<w:t xml:space="preserve">'+xmlText(line)+'</w:t>').join('<w:br/>');
-  const points=emu=>(emu/12700).toFixed(3)+'pt';
-  const style='position:absolute;margin-left:'+points(position.x)+';margin-top:'+points(position.y)+
-    ';width:'+points(width)+';height:'+points(height)+';z-index:'+(251659264+id)+
-    ';mso-position-horizontal-relative:page;mso-position-vertical-relative:page;mso-wrap-style:none';
-  return '<w:r><w:pict><v:rect id="Texto'+id+'" style="'+style+'" filled="f" stroked="f">'+
-    '<v:textbox inset="0,0,0,0"><w:txbxContent><w:p><w:pPr><w:spacing w:before="0" w:after="0" w:line="'+Math.round(text.lineHeight*scale/635)+'" w:lineRule="exact"/><w:jc w:val="'+align+'"/></w:pPr>'+
-    '<w:r><w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial"/>'+(text.bold?'<w:b/>':'')+(text.italic?'<w:i/>':'')+'<w:color w:val="'+color+'"/><w:sz w:val="'+size+'"/></w:rPr>'+content+
-    '</w:r></w:p></w:txbxContent></v:textbox><w10:wrap type="none" anchorx="page" anchory="page"/></v:rect></w:pict></w:r>';
-
+    '</pic:spPr></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r>';
 }
 export function makeWord(sheets,pageImages,name) {
   const files = {}, links=[];
@@ -307,40 +256,68 @@ export function makeWord(sheets,pageImages,name) {
   return packageWord(files,links,body,name,'0');
 }
 
-export function makeEditableWord(pages,name) {
+export function makeEditableWord(report,fields,period,dateFormat,name) {
   const files={}, links=[];
-  let drawingId=0;
-  const pageWidth=11906*635;
-  const pageHeight=16838*635;
-  const artworkWidth=7450000;
-  function drawing(url,label,width,height,position) {
-    const id=++drawingId;
-    const extension=url.startsWith('data:image/png')?'png':'jpg';
-    const filename=label+'-'+id+'.'+extension;
-    const path='media/'+filename;
-    files['word/'+path]=jpeg(url);
-    links.push(relationship('rId'+id,'image',path));
-    return wordDrawing(id,Math.round(width),Math.round(height),filename,position);
+  const escape = value => String(value ?? '').replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g,'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&apos;'}[char]));
+  function paragraph(value,{bold=false,color='190A60',size=20,page=false}={}) {
+    const content=String(value ?? '').split('\n').map(line=>'<w:t xml:space="preserve">'+escape(line)+'</w:t>').join('<w:br/>');
+    return '<w:p><w:pPr>'+(page?'<w:pageBreakBefore/>':'')+'<w:spacing w:after="55" w:line="240" w:lineRule="auto"/></w:pPr><w:r><w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial"/>'+(bold?'<w:b/>':'')+'<w:color w:val="'+color+'"/><w:sz w:val="'+size+'"/></w:rPr>'+content+'</w:r></w:p>';
   }
-  const body=pages.map(({canvas,photos,wordText},index)=>{
-    const scale=artworkWidth/canvas.width;
-    const artworkHeight=canvas.height*scale;
-    const x=Math.round((pageWidth-artworkWidth)/2);
-    const y=Math.round((pageHeight-artworkHeight)/2);
-    const background=drawing(canvas.toDataURL('image/png'),'moldura',artworkWidth,artworkHeight,{x,y,background:true});
-    const pictures=photos.map(photo=>drawing(photo.url,'foto',photo.width*scale,photo.height*scale,{
-      x:Math.round(x+photo.x*scale),y:Math.round(y+photo.y*scale)
-    })).join('');
-    const textBoxes=wordText.map(text=>wordTextBox(++drawingId,text,scale,{
-      x:Math.round(x+text.x*scale),y:Math.round(y+text.y*scale)
-    })).join('');
-    return '<w:p><w:pPr>'+(index?'<w:pageBreakBefore/>':'')+'<w:spacing w:before="0" w:after="0"/></w:pPr>'+background+pictures+textBoxes+'</w:p>';
-  }).join('');
-  return packageWord(files,links,body,name,'0');
+  function cell(content,fill='FFFFFF') {
+    return '<w:tc><w:tcPr><w:tcW w:type="dxa" w:w="5000"/><w:shd w:val="clear" w:color="auto" w:fill="'+fill+'"/></w:tcPr>'+content+'</w:tc>';
+  }
+  function table(rows) {
+    const borders=['top','left','bottom','right','insideH','insideV'].map(side=>'<w:'+side+' w:val="single" w:sz="6" w:color="190A60"/>').join('');
+    return '<w:tbl><w:tblPr><w:tblW w:type="dxa" w:w="10000"/><w:tblBorders>'+borders+'</w:tblBorders><w:tblLayout w:type="fixed"/></w:tblPr><w:tblGrid><w:gridCol w:w="5000"/><w:gridCol w:w="5000"/></w:tblGrid>'+rows.map(row=>'<w:tr><w:trPr><w:cantSplit/></w:trPr>'+row+'</w:tr>').join('')+'</w:tbl>';
+  }
+  function photo(image) {
+    if (!image?.url) return paragraph(' ');
+    const id=links.length+1;
+    const png=image.url.startsWith('data:image/png');
+    const path='media/foto-'+id+(png?'.png':'.jpg');
+    files['word/'+path]=jpeg(image.url);
+    links.push(relationship('rId'+id,'image',path));
+    const width=image.width||1400, height=image.height||1050;
+    const scale=Math.min(2880000/width,1900000/height);
+    return '<w:p><w:pPr><w:jc w:val="center"/></w:pPr>'+wordDrawing(id,Math.round(width*scale),Math.round(height*scale))+'</w:p>';
+  }
+  const progress = (label,value) => value == null || value === '' ? '' : label+': '+value+'%';
+  function evidencePair(left,right) {
+    const metadata = slot => paragraph('Dia '+dateFormat(slot.date),{bold:true,color:'CEFF00'})+
+      paragraph('Empresa: '+(slot.company??''),{color:'FFFFFF',size:17})+
+      paragraph('Local: '+(slot.place??''),{bold:true,color:'CEFF00'})+
+      (slot.activity?paragraph('Atividade: '+slot.activity,{color:'FFFFFF',size:17}):'')+
+      (progress('Avanço',slot.progress)?paragraph(progress('Avanço',slot.progress),{color:'FFFFFF',size:17}):'');
+    const description = slot => paragraph(slot.description)+
+      (progress('Serviço',slot.serviceProgress)?paragraph(progress('Serviço',slot.serviceProgress),{size:17}):'');
+    return [cell(metadata(left),'190A60')+cell(metadata(right),'190A60'),
+      cell(photo(left.image))+cell(photo(right.image)),
+      cell(description(left),'CEFF00')+cell(description(right),'CEFF00')];
+  }
+  const heading = page => paragraph('BRAVA Energia',{bold:true,size:36,page})+
+    paragraph('REGISTRO DE EVIDÊNCIA',{bold:true,size:25})+paragraph('FORM-CORP-SMS-030 · GS2 – USO INTERNO · Rev.: 00',{size:16});
+  const footer = () => paragraph('BRAVA ENERGIA',{bold:true,size:16})+
+    paragraph('DOCUMENTOS IMPRESSOS SÃO CONSIDERADOS CÓPIAS NÃO CONTROLADAS',{size:15});
+  const fieldsRows=[];
+  for (let i=0;i<fields.length;i+=2) {
+    fieldsRows.push([fields[i],fields[i+1]].map(field=>{
+      if (!field) return cell(paragraph(''));
+      const [key,label]=field;
+      const value=report.details[key];
+      return cell(paragraph(label+': '+(key==='reportDate'?dateFormat(value):key==='evidence'?evidenceText(value):value??'')));
+    }).join(''));
+  }
+  const projects=projectProgress(report);
+  const summary=projects.map(item=>paragraph(item.name+' · '+(item.value===null?'Não informado':item.value+'%')+' · '+item.count+' registros fotográficos')).join('');
+  const body=heading(false)+paragraph('FORMULÁRIO',{bold:true})+table(fieldsRows)+paragraph('Período: '+period)+
+    paragraph('AVANÇO FÍSICO DOS PROJETOS',{bold:true})+summary+
+    paragraph(projects.length+' atividades · '+report.pages.flat().filter(slot=>slot.image).length+' fotografias · '+projects.filter(item=>item.value===100).length+' concluídas')+footer()+
+    report.pages.map(slots=>heading(true)+table([...evidencePair(slots[0],slots[1]),...evidencePair(slots[2],slots[3])])+footer()).join('');
+  return packageWord(files,links,body,name,'700');
 }
 
 function packageWord(files,links,body,name,margin) {
-  files['word/document.xml']='<w:document xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w10="urn:schemas-microsoft-com:office:word" xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"><w:body>'+body+'<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="'+margin+'" w:right="'+margin+'" w:bottom="'+margin+'" w:left="'+margin+'" w:header="0" w:footer="0" w:gutter="0"/></w:sectPr></w:body></w:document>';
+  files['word/document.xml']='<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"><w:body>'+body+'<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="'+margin+'" w:right="'+margin+'" w:bottom="'+margin+'" w:left="'+margin+'" w:header="0" w:footer="0" w:gutter="0"/></w:sectPr></w:body></w:document>';
   files['word/_rels/document.xml.rels']=relationships(links.join(''));
   files['_rels/.rels']=relationships(relationship('rId1','officeDocument','word/document.xml'));
   files['[Content_Types].xml']='<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Default Extension="png" ContentType="image/png"/><Default Extension="jpg" ContentType="image/jpeg"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>';
