@@ -1,6 +1,6 @@
 function projectProgress(report){const m=new Map();for(const s of report.pages.flat()){const name=s.activity?.trim();if(!name||s.progress==null||s.progress===''||!Number.isFinite(Number(s.progress)))continue;const k=name.toLocaleLowerCase('pt-BR');if(!m.has(k)||(s.date||'')>=m.get(k).date)m.set(k,{name,value:Number(s.progress),date:s.date||''});}return [...m.values()];}
-import { openCamera } from './camera.js?v=24';
-import { renderSheets, makePDF, makeWord } from './exports.js?v=24';
+import { openCamera } from './camera.js?v=25';
+import { renderSheets, makePDF, makeWord } from './exports.js?v=25';
 const $ = id => document.getElementById(id);
 const create = (tag, text) => {
   const element = document.createElement(tag);
@@ -250,7 +250,7 @@ async function readStamp(slot,report,photo,version,manual=false) {
     const {readStampInfo} = await import('./stamp.js');
     const result = await readStampInfo(photo,{places:savedOptions('place'),companies:savedOptions('company')});
     if (version !== state.version || slot.image !== photo) return;
-    state.text = result.text;
+    state.text = result.text;photo.stampText=result.text;persist(report);
     const filled = [];
     if (result.date && ((canReplace(slot,'date') && slot.auto?.date !== 'exif') || (manual && slot.auto?.date))) {
       setAuto(slot,'date',result.date,'stamp'); filled.push('Dia');
@@ -282,7 +282,7 @@ function addPhoto(slot,report,file,capture=null) {
   const task = Promise.all([resizePhoto(file),exifDate(file)]).then(async ([photo,taken]) => {
     if (version !== state.version) return;
     slot.image = photo;
-    if(capture){photo.original=capture.original;photo.capturedAt=capture.capturedAt;photo.gps=capture.gps;}
+    if(capture){photo.original=capture.original;photo.capturedAt=capture.capturedAt;photo.gps=capture.gps;photo.stampDescription=capture.stampDescription;photo.stampText=capture.stampText;state.text=capture.stampText;}
     if(capture) setAuto(slot,'date',capture.date,'capture');
     else if (canReplace(slot,'date')) setAuto(slot,'date',taken || iso(new Date()),taken ? 'exif' : 'today');
     for (const key of ['company','place']) {
@@ -389,7 +389,7 @@ const sheet = (() => {
   const original = create('button','Salvar original');
   original.onclick=()=>{if(api.slot?.image?.original)download(new File([api.slot.image.original],'foto-original.png',{type:'image/png'}));};
   const read = create('button','Ler carimbo');
-  const copy = create('button','Copiar texto do carimbo');
+  const copy = create('button','Copiar carimbo para descrição');
   const remove = create('button','Remover foto');
   tools.append(change,camera,original,read,copy,remove);
   const content=create('div');content.className='edit-content';
@@ -438,7 +438,7 @@ const sheet = (() => {
       read.hidden = remove.hidden = !slot.image;
       original.hidden = !slot.image?.original;
       read.disabled = state.reading;
-      copy.hidden = !state.text;
+      copy.hidden = !(state.text || slot.image?.stampText || slot.image?.stampDescription);
       change.textContent = slot.image ? 'Trocar foto' : 'Escolher foto';
     }
   };
@@ -453,10 +453,17 @@ const sheet = (() => {
     const task = readStamp(slot,api.report,slot.image,stateOf(slot).version,true).finally(() => pending.delete(task));
     pending.add(task);
   };
-  copy.onclick = async () => {
-    const state = stateOf(api.slot);
-    try { await navigator.clipboard.writeText(state.text); state.message = 'Texto do carimbo copiado.'; }
-    catch { state.message = state.text; }
+  copy.onclick = () => {
+    const slot=api.slot;if(!slot?.image)return;
+    const state=stateOf(slot);
+    const raw=state.text||slot.image.stampText||'';
+    const value=slot.image.stampDescription||raw.split(/\r?\n/).map(x=>x.trim()).filter(x=>x&&!/^(GPS|latitude|longitude)\b/i.test(x)&&! /\d{1,2}[\/.-]\d{1,2}[\/.-]\d{2,4}|\d{1,2}:\d{2}/.test(x)&&x.toLowerCase()!==(slot.company||'').trim().toLowerCase()).join('\n');
+    if(!value.trim()){state.message='Nenhuma descrição identificada no carimbo. Use Ler carimbo.';api.sync();return;}
+    const previous=slot.description||'';
+    const next=previous.trim()?(previous.includes(value)?previous:previous+'\n'+value):value;
+    userChange(slot,api.report,'description',next);
+    inputs.description.value=next;
+    state.message='Texto do carimbo inserido na descrição.';
     api.sync();
   };
   remove.onclick = () => removePhoto(api.slot,api.report);
