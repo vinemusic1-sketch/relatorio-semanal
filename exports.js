@@ -234,13 +234,13 @@ function wordPage(sheet,index) {
   const height=Math.round(width*sheet.height/sheet.width);
   return '<w:p><w:pPr>'+(index ? '<w:pageBreakBefore/>' : '')+
     '<w:spacing w:before="0" w:after="0" w:line="240" w:lineRule="auto"/><w:jc w:val="center"/></w:pPr>'+
-    wordDrawing(id,width,height)+'</w:p>';
+    wordDrawing(id,width,height,'Pagina-'+id+'.png')+'</w:p>';
 }
-function wordDrawing(id,width,height) {
+function wordDrawing(id,width,height,name) {
   const size='cx="'+width+'" cy="'+height+'"';
   return '<w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0"><wp:extent '+size+'/>'+
-    '<wp:docPr id="'+id+'" name="Imagem '+id+'"/><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">'+
-    '<pic:pic><pic:nvPicPr><pic:cNvPr id="'+id+'" name="Imagem '+id+'"/><pic:cNvPicPr/></pic:nvPicPr>'+
+    '<wp:docPr id="'+id+'" name="'+name+'"/><wp:cNvGraphicFramePr/><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">'+
+    '<pic:pic><pic:nvPicPr><pic:cNvPr id="'+id+'" name="'+name+'"/><pic:cNvPicPr/></pic:nvPicPr>'+
     '<pic:blipFill><a:blip r:embed="rId'+id+'"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>'+
     '<pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext '+size+'/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom>'+
     '</pic:spPr></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r>';
@@ -279,7 +279,7 @@ export function makeEditableWord(report,fields,period,dateFormat,name) {
     links.push(relationship('rId'+id,'image',path));
     const width=image.width||1400, height=image.height||1050;
     const scale=Math.min(2880000/width,1900000/height);
-    return '<w:p><w:pPr><w:jc w:val="center"/></w:pPr>'+wordDrawing(id,Math.round(width*scale),Math.round(height*scale))+'</w:p>';
+    return '<w:p><w:pPr><w:jc w:val="center"/></w:pPr>'+wordDrawing(id,Math.round(width*scale),Math.round(height*scale),path.split('/').at(-1))+'</w:p>';
   }
   const progress = (label,value) => value == null || value === '' ? '' : label+': '+value+'%';
   function evidencePair(left,right) {
