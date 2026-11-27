@@ -116,7 +116,7 @@ export async function renderSheets(report, fields, period, dateFormat) {
     const bottom=1605;
     const blockH=(bottom-top)/2;
     let contentEnd=top;
-    const hasContent = slot => slot && (slot.image || [slot.date,slot.company,slot.place,slot.description].some(v => v?.trim()));
+    const hasContent = slot => slot && (slot.image || [slot.date,slot.company,slot.place,slot.description,slot.activity,slot.progress].some(v => v?.trim()));
     function rounded(x,y,w,h,r) {
       ctx.beginPath();
       ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r);
@@ -125,7 +125,10 @@ export async function renderSheets(report, fields, period, dateFormat) {
     async function drawRow(pair,y0) {
       if (!pair.some(hasContent)) return;
       const gap=16, w=(R-L-gap)/2, radius=14;
-      const metaH=50, band=40, desc=76;
+      const hasProgress=s=>s.progress!==undefined && s.progress!==null && s.progress!=='' && Number.isFinite(Number(s.progress));
+      const hasActivity=pair.some(s=>s.activity?.trim());
+      const showProgress=pair.some(hasProgress);
+      const metaH=50, band=40+(hasActivity?26:0)+(showProgress?26:0), desc=76;
       const ty=y0+metaH+8;
       const ph=Math.min(blockH-metaH-8-band-desc-28,450);
       for (const [index,slot] of pair.entries()) {
@@ -156,6 +159,15 @@ export async function renderSheets(report, fields, period, dateFormat) {
         ctx.fillStyle=navyBlue; ctx.fillRect(x,ty+band+ph-1,w,2);
         const wl=text('Local: ',x+14,ty+28,21,{bold:true,color:neonGreen});
         text(slot.place ?? '',x+14+wl,ty+28,21,{bold:true,color:neonGreen,max:w-28-wl});
+        if(slot.activity?.trim()) text('Atividade: '+slot.activity,x+14,ty+50,17,{bold:true,color:'#ffffff',max:w-28});
+        if(hasProgress(slot)){
+          const p=Math.max(0,Math.min(100,Number(slot.progress)));
+          const py=ty+40+(hasActivity?26:0);
+          text('Avanço '+p+'%',x+14,py+18,16,{bold:true,color:'#ffffff'});
+          const bx=x+135,bw=w-149,bh=12,by=py+6;
+          ctx.fillStyle='#51488a';ctx.fillRect(bx,by,bw,bh);
+          if(p>0){const g=ctx.createLinearGradient(bx,by,bx+bw,by);g.addColorStop(0,'#ff6955');g.addColorStop(.45,'#ffd84a');g.addColorStop(1,'#ceff00');ctx.fillStyle=g;ctx.fillRect(bx,by,bw*p/100,bh);}
+        }
         font(17,true); ctx.fillStyle=navyBlue;
         wrap(ctx,slot.description ?? '',x+14,ty+band+ph+26,w-28,21,3);
       }

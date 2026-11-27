@@ -1,5 +1,5 @@
-import { openCamera } from './camera.js?v=17';
-import { renderSheets, makePDF, makeWord } from './exports.js?v=17';
+import { openCamera } from './camera.js?v=18';
+import { renderSheets, makePDF, makeWord } from './exports.js?v=18';
 const $ = id => document.getElementById(id);
 const create = (tag, text) => {
   const element = document.createElement(tag);
@@ -12,7 +12,7 @@ const fields = [
   ['owner','Responsável pela ação',''], ['reportDate','Data',''], ['evidence','Tipo de evidência','Foto / Imagem'],
   ['summary','Descrição da ação','Registro Semanal de Atividades']
 ];
-const emptyPage = () => Array.from({length:4}, () => ({date:'', company:'', place:'', description:'', image:null}));
+const emptyPage = () => Array.from({length:4}, () => ({date:'', company:'', place:'', description:'', activity:'', progress:'', image:null}));
 const iso = d => [d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('-');
 const parse = d => new Date(d+'T12:00:00');
 const fmt = d => d ? d.split('-').reverse().join('/') : '';
@@ -348,7 +348,7 @@ const sheet = (() => {
     const input = create(type === 'textarea' ? 'textarea' : 'input');
     if (type !== 'textarea') input.type = type;
     if (type === 'text') input.autocomplete = 'off';
-    input.addEventListener('input',() => api.slot && userChange(api.slot,api.report,key,input.value));
+    input.addEventListener('input',() => {if(api.slot && (key!=='progress' || input.value==='' || (input.validity.valid && Number.isFinite(Number(input.value))))) userChange(api.slot,api.report,key,input.value);});
     line.append(input);
     if (picker) {
       const chooser = create('select');
@@ -372,6 +372,10 @@ const sheet = (() => {
     return wrapper;
   };
   const description = field('Descrição da atividade','description','textarea');
+  const activity = field('Atividade (título)','activity','text');
+  const progress = field('Avanço da atividade (%)','progress','number');
+  inputs.progress.min='0'; inputs.progress.max='100'; inputs.progress.step='1'; inputs.progress.inputMode='numeric'; inputs.progress.placeholder='Não informado';
+  inputs.progress.addEventListener('change',()=>{if(api.slot){const v=inputs.progress.value;const normalized=v===''?'':String(Math.max(0,Math.min(100,Math.round(Number(v)))));inputs.progress.value=normalized;userChange(api.slot,api.report,'progress',normalized);}});
   const grid = create('div');
   grid.className = 'sheet-grid';
   grid.append(field('Dia','date','date'),field('Empresa','company','text',true));
@@ -387,7 +391,7 @@ const sheet = (() => {
   const copy = create('button','Copiar texto do carimbo');
   const remove = create('button','Remover foto');
   tools.append(change,camera,original,read,copy,remove);
-  dialog.append(head,preview,status,description,grid,place,tools);
+  dialog.append(head,preview,status,grid,place,activity,progress,description,tools);
   document.body.append(dialog);
   const api = {
     slot:null, report:null,
@@ -401,7 +405,7 @@ const sheet = (() => {
       const slot = api.slot;
       if (!slot) return;
       const state = stateOf(slot);
-      for (const key of ['date','company','place','description']) {
+      for (const key of ['date','company','place','description','activity','progress']) {
         if (all || document.activeElement !== inputs[key]) inputs[key].value = slot[key] || (key === 'date' ? iso(new Date()) : '');
       }
       preview.hidden = !slot.image;
@@ -510,7 +514,17 @@ function liveCell(slot,index,pageIndex,report) {
     const company = create('span');
     company.append('Empresa: ',create('b',slot.company || '—'));
     meta.replaceChildren(day,company);
-    band.replaceChildren(create('b','Local: '),document.createTextNode(slot.place || ''));
+    const location = create('span','Local: '+(slot.place || '')); location.className='lp-location';
+    band.replaceChildren(location);
+    if(slot.activity?.trim()){const title=create('span','Atividade: '+slot.activity);title.className='lp-activity';band.append(title);}
+    if(slot.progress!==undefined && slot.progress!==null && slot.progress!=='' && Number.isFinite(Number(slot.progress))){
+      const p=Math.max(0,Math.min(100,Number(slot.progress)));
+      const row=create('span');row.className='lp-progress';
+      const label=create('b','Avanço '+p+'%');
+      const track=create('span');track.className='lp-progress-track';
+      const fill=create('span');fill.className='lp-progress-fill';fill.style.width=p+'%';
+      track.append(fill);row.append(label,track);band.append(row);
+    }
     img.hidden = !slot.image;
     prompt.hidden = Boolean(slot.image);
     if (slot.image) { if (img.src !== slot.image.url) img.src = slot.image.url; } else img.removeAttribute('src');
@@ -578,7 +592,7 @@ $('view').onclick = async () => {
     await Promise.all(pending);
     const report = structuredClone(current);
     while (report.pages.length > 1 && report.pages.at(-1).every(slot =>
-      !slot.image && ![slot.date,slot.company,slot.place,slot.description].some(value => value?.trim()))) {
+      !slot.image && ![slot.date,slot.company,slot.place,slot.description,slot.activity,slot.progress].some(value => value?.trim()))) {
       report.pages.pop();
     }
     const name = 'Relatorio-Semanal-'+report.start;
