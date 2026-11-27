@@ -1,5 +1,5 @@
 const cachePrefix = 'relatorio-semanal-';
-const cacheName = cachePrefix + 'v45';
+const cacheName = cachePrefix + 'v46';
 const scope = new URL(self.registration.scope);
 const assets = ['/', '/index.html', '/style.css', '/app.js', '/camera.js', '/exports.js', '/stamp.js', '/manifest.webmanifest', '/rl-180.png', '/rl-192.png', '/rl-512.png'];
 self.addEventListener('install', event => {

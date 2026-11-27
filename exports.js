@@ -256,154 +256,303 @@ export function makeWord(sheets,pageImages,name) {
   return packageWord(files,links,body,name,'0');
 }
 
+// ---------- Word editável com o mesmo desenho do app ----------
+// Placas arredondadas (formas do Word atrás do texto) + tabelas sem bordas com texto e fotos editáveis.
+// Medidas em pixels da página do app (1240 x 1754 = A4); 1 px = 9,6 twips = 6096 EMU.
 export async function makeEditableWord(report,period,dateFormat,name) {
-  const files={}, links=[];
-  const escape = value => String(value ?? '').replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g,'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&apos;'}[char]));
-  function paragraph(value,{bold=false,color='190A60',size=20,page=false,center=false,italic=false}={}) {
-    const content=String(value ?? '').split('\n').map(line=>'<w:t xml:space="preserve">'+escape(line)+'</w:t>').join('<w:br/>');
-    return '<w:p><w:pPr>'+(page?'<w:pageBreakBefore/>':'')+'<w:spacing w:after="55" w:line="240" w:lineRule="auto"/>'+(center?'<w:jc w:val="center"/>':'')+'</w:pPr><w:r><w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial"/>'+(bold?'<w:b/>':'')+(italic?'<w:i/>':'')+'<w:color w:val="'+color+'"/><w:sz w:val="'+size+'"/></w:rPr>'+content+'</w:r></w:p>';
+  const tw = px => Math.round(px*9.6), emu = px => Math.round(px*6096), hp = px => Math.max(2,Math.round(px*0.96));
+  const hex = color => color.replace('#','').toUpperCase();
+  const esc = value => String(value ?? '').replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g,'')
+    .replace(/[&<>"]/g,c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  const files = {}, links = [];
+  let rid = 10, shapeId = 1, z = 1000;
+  function addMedia(data,ext) {
+    const id = 'rId'+(++rid), path = 'media/img'+rid+'.'+ext;
+    files['word/'+path] = data;
+    links.push(relationship(id,'image',path));
+    return id;
   }
-  const sides=['top','left','bottom','right','insideH','insideV'];
-  const border=side=>'<w:'+side+' w:val="single" w:sz="6" w:color="190A60"/>';
-  const blankBorder=side=>'<w:'+side+' w:val="nil"/>';
-  const frameWidth=10000, gutterWidth=180, photoWidth=(frameWidth-gutterWidth)/2;
-  function cell(content,fill='FFFFFF',width=photoWidth,gutter=false) {
-    const borders=gutter?'<w:tcBorders>'+sides.map(blankBorder).join('')+'</w:tcBorders>':'';
-    return '<w:tc><w:tcPr><w:tcW w:type="dxa" w:w="'+width+'"/>'+borders+
-      '<w:shd w:val="clear" w:color="auto" w:fill="'+fill+'"/><w:vAlign w:val="center"/></w:tcPr>'+content+'</w:tc>';
+  // Texto
+  function run(text,{bold=false,italic=false,color=ink,size=17,spacing=0}={}) {
+    return '<w:r><w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial" w:cs="Arial"/>'+(bold?'<w:b/><w:bCs/>':'')+(italic?'<w:i/><w:iCs/>':'')+
+      '<w:color w:val="'+hex(color)+'"/>'+(spacing?'<w:spacing w:val="'+spacing+'"/>':'')+'<w:sz w:val="'+hp(size)+'"/><w:szCs w:val="'+hp(size)+'"/></w:rPr>'+
+      '<w:t xml:space="preserve">'+esc(text)+'</w:t></w:r>';
   }
-  function table(rows,widths,innerLines=true) {
-    const borders=sides.map(side=>!innerLines&&side.startsWith('inside')?blankBorder(side):border(side)).join('');
-    return '<w:tbl><w:tblPr><w:tblW w:type="pct" w:w="4759"/><w:jc w:val="center"/><w:tblBorders>'+
-      borders+'</w:tblBorders><w:tblLayout w:type="fixed"/><w:tblCellMar><w:top w:w="45" w:type="dxa"/><w:left w:w="95" w:type="dxa"/>'+
-      '<w:bottom w:w="45" w:type="dxa"/><w:right w:w="95" w:type="dxa"/></w:tblCellMar></w:tblPr><w:tblGrid>'+
-      widths.map(width=>'<w:gridCol w:w="'+width+'"/>').join('')+'</w:tblGrid>'+
-      rows.map(row=>'<w:tr><w:trPr><w:cantSplit/></w:trPr>'+row+'</w:tr>').join('')+'</w:tbl>';
+  const tab = '<w:r><w:tab/></w:r>';
+  function para(content='',{align='left',line=0,before=0,tabs=[],indL=0,indR=0,top=null,pageBreak=false}={}) {
+    return '<w:p><w:pPr>'+(pageBreak?'<w:pageBreakBefore/>':'')+
+      (top?'<w:pBdr><w:top w:val="single" w:sz="'+top.sz+'" w:space="4" w:color="'+hex(top.color)+'"/></w:pBdr>':'')+
+      (tabs.length?'<w:tabs>'+tabs.map(t => '<w:tab w:val="'+t.align+'" w:pos="'+tw(t.pos)+'"/>').join('')+'</w:tabs>':'')+
+      '<w:spacing w:before="'+tw(before)+'" w:after="0" '+(line?'w:line="'+tw(line)+'" w:lineRule="exact"':'w:line="240" w:lineRule="auto"')+'/>'+
+      (indL||indR?'<w:ind w:left="'+tw(indL)+'" w:right="'+tw(indR)+'"/>':'')+
+      '<w:jc w:val="'+align+'"/><w:rPr><w:sz w:val="2"/></w:rPr></w:pPr>'+content+'</w:p>';
   }
-  const gap=()=>'<w:p><w:pPr><w:spacing w:line="160" w:lineRule="exact"/></w:pPr></w:p>';
-  const gutter=()=>cell(gap(),'FFFFFF',gutterWidth,true);
-  async function photo(image) {
-    const canvas=document.createElement('canvas');
-    canvas.width=900;
-    canvas.height=550;
-    const ctx=canvas.getContext('2d');
-    ctx.fillStyle='#ffffff';
-    ctx.fillRect(0,0,canvas.width,canvas.height);
-    if (image?.url) {
-      const source=new Image();
-      source.src=image.url;
-      await source.decode();
-      const scale=Math.min(884/source.width,534/source.height);
-      const width=source.width*scale, height=source.height*scale;
-      ctx.drawImage(source,(canvas.width-width)/2,(canvas.height-height)/2,width,height);
-    } else {
-      ctx.fillStyle='#696579';
-      ctx.textAlign='center';
-      ctx.textBaseline='middle';
-      ctx.font='24px Arial, sans-serif';
-      ctx.fillText('Espaço para foto',450,275);
+  // Placa arredondada fixa na página, atrás do texto
+  function plate({x,y,w,h,radius=0,fill=null,line=null,lineW=1.5,shape='roundRect',flipV=false}) {
+    const id = shapeId++;
+    const ratio = Math.min(.5,radius/Math.max(1,Math.min(w,h)));
+    const adj = shape === 'roundRect' ? '<a:gd name="adj" fmla="val '+Math.round(ratio*100000)+'"/>' :
+      shape === 'round2SameRect' ? '<a:gd name="adj1" fmla="val '+Math.round(ratio*100000)+'"/><a:gd name="adj2" fmla="val 0"/>' : '';
+    // Mesmo formato que o próprio Word grava (forma moderna dentro de AlternateContent).
+    return '<w:r><mc:AlternateContent><mc:Choice Requires="wps"><w:drawing><wp:anchor distT="0" distB="0" distL="0" distR="0" simplePos="0" relativeHeight="'+(z++)+'" behindDoc="1" locked="1" layoutInCell="1" allowOverlap="1">'+
+      '<wp:simplePos x="0" y="0"/><wp:positionH relativeFrom="page"><wp:posOffset>'+emu(x)+'</wp:posOffset></wp:positionH>'+
+      '<wp:positionV relativeFrom="page"><wp:posOffset>'+emu(y)+'</wp:posOffset></wp:positionV>'+
+      '<wp:extent cx="'+emu(w)+'" cy="'+emu(h)+'"/><wp:effectExtent l="0" t="0" r="0" b="0"/><wp:wrapNone/>'+
+      '<wp:docPr id="'+(5000+id)+'" name="Placa '+id+'"/><wp:cNvGraphicFramePr/>'+
+      '<a:graphic><a:graphicData uri="http://schemas.microsoft.com/office/word/2010/wordprocessingShape"><wps:wsp><wps:cNvSpPr/>'+
+      '<wps:spPr><a:xfrm'+(flipV?' flipV="1"':'')+'><a:off x="0" y="0"/><a:ext cx="'+emu(w)+'" cy="'+emu(h)+'"/></a:xfrm>'+
+      '<a:prstGeom prst="'+shape+'"><a:avLst>'+adj+'</a:avLst></a:prstGeom>'+
+      (fill?'<a:solidFill><a:srgbClr val="'+hex(fill)+'"/></a:solidFill>':'<a:noFill/>')+
+      (line?'<a:ln w="'+emu(lineW)+'"><a:solidFill><a:srgbClr val="'+hex(line)+'"/></a:solidFill></a:ln>':'<a:ln><a:noFill/></a:ln>')+
+      '</wps:spPr><wps:bodyPr/></wps:wsp></a:graphicData></a:graphic></wp:anchor></w:drawing></mc:Choice><mc:Fallback><w:pict/></mc:Fallback></mc:AlternateContent></w:r>';
+  }
+  function picture(id,w,h,label) {
+    const n = shapeId++;
+    const size = 'cx="'+emu(w)+'" cy="'+emu(h)+'"';
+    return '<w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0"><wp:extent '+size+'/><wp:effectExtent l="0" t="0" r="0" b="0"/>'+
+      '<wp:docPr id="'+(5000+n)+'" name="'+esc(label)+'"/><wp:cNvGraphicFramePr><a:graphicFrameLocks noChangeAspect="1"/></wp:cNvGraphicFramePr>'+
+      '<a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic>'+
+      '<pic:nvPicPr><pic:cNvPr id="'+(5000+n)+'" name="'+esc(label)+'"/><pic:cNvPicPr/></pic:nvPicPr>'+
+      '<pic:blipFill><a:blip r:embed="'+id+'"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>'+
+      '<pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext '+size+'/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr>'+
+      '</pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r>';
+  }
+  // Barras de avanço desenhadas como imagem (mesmas cores e degradê do app)
+  function bar(w,h,percent,style) {
+    const scale = 4, canvas = document.createElement('canvas');
+    canvas.width = Math.round(w*scale); canvas.height = Math.round(h*scale);
+    const ctx = canvas.getContext('2d');
+    const p = Math.max(0,Math.min(100,Number(percent) || 0))/100;
+    const r = style === 'project' ? canvas.height/2 : 0;
+    const round = (x,width) => { ctx.beginPath(); if (ctx.roundRect && r) ctx.roundRect(x,0,width,canvas.height,r); else ctx.rect(x,0,width,canvas.height); };
+    const colors = {project:['#dedbea',['#ff574d','#ffbc32','#ceff00']],band:['#51488a',['#ff6955','#ffd84a','#ceff00']],service:['#a4cb00',null]}[style];
+    round(0,canvas.width); ctx.fillStyle = colors[0]; ctx.fill();
+    if (p > 0) {
+      ctx.save(); round(0,canvas.width); ctx.clip();
+      if (colors[1]) {
+        const g = ctx.createLinearGradient(0,0,canvas.width,0);
+        g.addColorStop(0,colors[1][0]); g.addColorStop(style === 'band' ? .45 : .5,colors[1][1]); g.addColorStop(1,colors[1][2]);
+        ctx.fillStyle = g;
+      } else ctx.fillStyle = navyBlue;
+      ctx.fillRect(0,0,canvas.width*p,canvas.height);
+      ctx.restore();
     }
-    const id=links.length+1;
-    const path='media/'+(image?.url?'foto-':'quadro-')+id+'.jpg';
-    files['word/'+path]=jpeg(canvas.toDataURL('image/jpeg',.94));
-    links.push(relationship('rId'+id,'image',path));
-    return '<w:p><w:pPr><w:jc w:val="center"/></w:pPr>'+wordDrawing(id,3000000,1833333)+'</w:p>';
+    const data = Uint8Array.from(atob(canvas.toDataURL('image/png').split(',')[1]),c => c.charCodeAt(0));
+    return picture(addMedia(data,'png'),w,h,'Barra de avanço');
   }
-  const progress = (label,value) => value == null || value === '' ? '' : label+': '+value+'%';
-  async function evidencePair(left,right) {
-    const metadata = slot => paragraph('Dia '+dateFormat(slot.date),{bold:true,color:'CEFF00'})+
-      paragraph('Empresa: '+(slot.company??''),{color:'FFFFFF',size:17})+
-      paragraph('Local: '+(slot.place??''),{bold:true,color:'CEFF00'})+
-      (slot.activity?paragraph('Atividade: '+slot.activity,{color:'FFFFFF',size:17}):'')+
-      (progress('Avanço',slot.progress)?paragraph(progress('Avanço',slot.progress),{color:'FFFFFF',size:17}):'');
-    const description = slot => paragraph(slot.description)+
-      (progress('Serviço',slot.serviceProgress)?paragraph(progress('Serviço',slot.serviceProgress),{size:17}):'');
-    const [leftPhoto,rightPhoto]=await Promise.all([photo(left.image),photo(right.image)]);
-    return [cell(metadata(left),'190A60')+gutter()+cell(metadata(right),'190A60'),
-      cell(leftPhoto)+gutter()+cell(rightPhoto),
-      cell(description(left),'CEFF00')+gutter()+cell(description(right),'CEFF00')];
-  }
-  const headerCells=[
-    cell(paragraph('BRAVA',{bold:true,italic:true,size:48})+paragraph('energia',{size:17}),'FFFFFF',2500),
-    cell(paragraph('REGISTRO DE EVIDÊNCIA',{bold:true,size:24,center:true}),'FFFFFF',4700),
-    cell(paragraph('FORM-CORP-SMS-030',{bold:true,size:16,center:true})+
-      paragraph('GS2 – USO INTERNO',{size:16,center:true})+paragraph('Rev.: 00',{size:16,center:true}),'FFFFFF',2800)
-  ];
-  const footer = () => paragraph('BRAVA ENERGIA',{bold:true,size:16})+
-    paragraph('DOCUMENTOS IMPRESSOS SÃO CONSIDERADOS CÓPIAS NÃO CONTROLADAS',{size:15});
-  const formWidths=[2700,1800,1800,3700];
-  const formRowHeights=[680,680,680,1000,800];
-  const details=report.details;
-  const field=key=>details[key]??'';
-  const pair=(left,right)=>[
-    {text:labels[left],bold:true},{text:field(left)},
-    {text:labels[right],bold:true},{text:right==='reportDate'?dateFormat(field(right)):field(right)}
-  ];
-  const formRows=[
-    pair('department','origin'),pair('reference','type'),pair('owner','reportDate'),
-    [{text:labels.evidence,bold:true},{text:evidenceText(field('evidence')),span:3}],
-    [{text:labels.summary+' '+field('summary'),span:2},{text:'Período: '+period,span:2}]
-  ];
-  const formTitle=paragraph('FORMULÁRIO',{bold:true,center:true});
-  const formBorders=['top','left','bottom','right','insideH','insideV'].map(side=>
-    '<w:'+side+' w:val="single" w:sz="6" w:color="190A60"/>'
-  ).join('');
-  const formGridStart='<w:tbl><w:tblPr><w:tblW w:type="pct" w:w="4759"/><w:jc w:val="center"/><w:tblBorders>'+formBorders+
-    '</w:tblBorders><w:tblLayout w:type="fixed"/><w:tblCellMar><w:left w:w="95" w:type="dxa"/><w:right w:w="95" w:type="dxa"/></w:tblCellMar></w:tblPr><w:tblGrid>'+
-    formWidths.map(width=>'<w:gridCol w:w="'+width+'"/>').join('')+'</w:tblGrid>';
-  const formGridRows=formRows.map((row,index)=>{
-      let column=0;
-      return '<w:tr><w:trPr><w:cantSplit/><w:trHeight w:val="'+formRowHeights[index]+'" w:hRule="atLeast"/></w:trPr>'+
-        row.map(entry=>{
-          const span=entry.span||1;
-          const width=formWidths.slice(column,column+span).reduce((sum,value)=>sum+value,0);
-          column+=span;
-          return '<w:tc><w:tcPr><w:tcW w:type="dxa" w:w="'+width+'"/>'+(span>1?'<w:gridSpan w:val="'+span+'"/>':'')+
-            '<w:vAlign w:val="center"/></w:tcPr>'+paragraph(entry.text,{bold:entry.bold,size:18})+'</w:tc>';
-        }).join('')+'</w:tr>';
+  // Tabela com grade calculada a partir das larguras de cada linha
+  function table(rows,{inside=null}={}) {
+    const edges = new Set([0]);
+    for (const row of rows) { let x = 0; for (const c of row.cells) { x += c.w; edges.add(tw(x)); } }
+    const grid = [...edges].sort((a,b) => a-b);
+    const total = grid[grid.length-1];
+    const border = inside ? '<w:insideH w:val="single" w:sz="'+inside.sz+'" w:color="'+hex(inside.color)+'"/><w:insideV w:val="single" w:sz="'+inside.sz+'" w:color="'+hex(inside.color)+'"/>' :
+      '<w:insideH w:val="nil"/><w:insideV w:val="nil"/>';
+    let y = 0;
+    const body = rows.map(row => {
+      const height = tw(y+row.h)-tw(y); y += row.h;
+      let x = 0;
+      const cells = row.cells.map(c => {
+        const start = tw(x); x += c.w; const end = tw(x);
+        const span = grid.indexOf(end)-grid.indexOf(start);
+        const m = c.mar || [0,0,0,0];
+        const b = c.borders ? '<w:tcBorders>'+Object.entries(c.borders).map(([side,v]) => '<w:'+side+' w:val="single" w:sz="'+v.sz+'" w:color="'+hex(v.color)+'"/>').join('')+'</w:tcBorders>' : '';
+        return '<w:tc><w:tcPr><w:tcW w:w="'+(end-start)+'" w:type="dxa"/>'+(span > 1 ? '<w:gridSpan w:val="'+span+'"/>' : '')+b+
+          (c.fill?'<w:shd w:val="clear" w:color="auto" w:fill="'+hex(c.fill)+'"/>':'')+
+          '<w:tcMar><w:top w:w="'+tw(m[0])+'" w:type="dxa"/><w:right w:w="'+tw(m[1])+'" w:type="dxa"/><w:bottom w:w="'+tw(m[2])+'" w:type="dxa"/><w:left w:w="'+tw(m[3])+'" w:type="dxa"/></w:tcMar>'+
+          '<w:vAlign w:val="'+(c.v || 'top')+'"/></w:tcPr>'+(c.content || para())+'</w:tc>';
+      }).join('');
+      return '<w:tr><w:trPr><w:cantSplit/><w:trHeight w:val="'+height+'" w:hRule="'+(row.rule || 'exact')+'"/></w:trPr>'+cells+'</w:tr>';
     }).join('');
-  const projects=projectProgress(report);
-  const totals=projects.length+' atividades   ·   '+report.pages.flat().filter(slot=>slot.image).length+
-    ' fotografias   ·   '+projects.filter(item=>item.value===100).length+' concluídas';
-  const mergedCell=(content,fill,width,span)=>cell(content,fill,width)
-    .replace(/(<w:tcW[^>]+\/>)/,'$1<w:gridSpan w:val="'+span+'"/>');
-  const fullRow=(content,fill='FFFFFF')=>'<w:tr>'+mergedCell(content,fill,frameWidth,4)+'</w:tr>';
-  const headerRow='<w:tr>'+headerCells[0].replace('w:w="2500"','w:w="2700"')+
-    headerCells[1].replace('<w:tcW w:type="dxa" w:w="4700"/>','<w:tcW w:type="dxa" w:w="3600"/><w:gridSpan w:val="2"/>')+
-    headerCells[2].replace('w:w="2800"','w:w="3700"')+'</w:tr>';
-  const progressWidths=[5400,2200,2400];
-  const progressHeading=mergedCell(paragraph('AVANÇO FÍSICO DOS PROJETOS',{bold:true,center:true,color:'FFFFFF',size:22}),
-    '190A60',frameWidth,3);
-  const columnLabels=['Atividade','Avanço','Registros fotográficos'].map((label,index)=>
-    cell(paragraph(label,{bold:true,center:index>0}),'E9E6F4',progressWidths[index])
-  ).join('');
-  const progressRows=projects.map((item,index)=>{
-    const fill=index%2?'F7F7FA':'FFFFFF';
-    const percent=item.value===null?'Não informado':item.value+'%';
-    return cell(paragraph(item.name,{bold:true}),fill,progressWidths[0])+
-      cell(paragraph(percent,{bold:true,center:true}),item.value===null?fill:'E8F4C8',progressWidths[1])+
-      cell(paragraph(String(item.count),{center:true}),fill,progressWidths[2]);
-  });
-  if (!progressRows.length) progressRows.push(mergedCell(paragraph('Nenhuma atividade registrada.',{center:true}),'FFFFFF',frameWidth,3));
-  const progressFooter=mergedCell(paragraph(totals,{bold:true,center:true}),'E9E6F4',frameWidth,3);
-  const summary=table([progressHeading,columnLabels,...progressRows,progressFooter],progressWidths);
-  const firstPage=formGridStart+headerRow+fullRow(formTitle)+formGridRows+'</w:tbl>'+gap()+summary;
-  const pageBreak='<w:p><w:pPr><w:spacing w:before="0" w:after="0"/></w:pPr><w:r><w:br w:type="page"/></w:r></w:p>';
-  const evidencePages=await Promise.all(report.pages.map(async slots=>{
-    const [top,bottom]=await Promise.all([evidencePair(slots[0],slots[1]),evidencePair(slots[2],slots[3])]);
-    const columns=[photoWidth,gutterWidth,photoWidth];
-    const heading=mergedCell(
-      paragraph('BRAVA Energia',{bold:true,italic:true,size:38,center:true})+
-      paragraph('REGISTRO DE EVIDÊNCIA',{bold:true,size:24,center:true})+
-      paragraph('FORM-CORP-SMS-030  ·  GS2 – USO INTERNO  ·  Rev.: 00',{size:16,center:true}),
-      'FFFFFF',frameWidth,3
-    );
-    const spacer=mergedCell(gap(),'FFFFFF',frameWidth,3);
-    return pageBreak+table([heading,...top,spacer,...bottom],columns)+gap()+footer();
-  }));
-  const body=firstPage+gap()+footer()+evidencePages.join('');
-  return packageWord(files,links,body,name,'700');
+    return '<w:tbl><w:tblPr><w:tblW w:w="'+total+'" w:type="dxa"/><w:tblInd w:w="0" w:type="dxa"/>'+
+      '<w:tblBorders><w:top w:val="nil"/><w:left w:val="nil"/><w:bottom w:val="nil"/><w:right w:val="nil"/>'+border+'</w:tblBorders>'+
+      '<w:tblLayout w:type="fixed"/><w:tblCellMar><w:top w:w="0" w:type="dxa"/><w:left w:w="0" w:type="dxa"/><w:bottom w:w="0" w:type="dxa"/><w:right w:w="0" w:type="dxa"/></w:tblCellMar>'+
+      '<w:tblLook w:val="0000"/></w:tblPr><w:tblGrid>'+grid.slice(1).map((g,i) => '<w:gridCol w:w="'+(g-grid[i])+'"/>').join('')+'</w:tblGrid>'+body+'</w:tbl>';
+  }
+  const blank = h => ({h,cells:[{w:R-L}]});
+
+  // Cantos arredondados feitos com pequenas imagens nos cantos de cada quadro:
+  // só tabelas, cores de célula e imagens em linha, que abrem iguais no Word, no iPhone e no Android.
+  const R0 = 10, LINE = 2, sz = 8;
+  const cornerCache = new Map();
+  function corner(pos,fill,line) {
+    const key = pos+fill+line;
+    if (!cornerCache.has(key)) {
+      const scale = 6, size = R0*scale, canvas = document.createElement('canvas');
+      canvas.width = canvas.height = size;
+      const ctx = canvas.getContext('2d');
+      const cx = pos.includes('L') ? size : 0, cy = pos.includes('T') ? size : 0;
+      ctx.beginPath(); ctx.arc(cx,cy,size,0,Math.PI*2); ctx.fillStyle = fill; ctx.fill();
+      if (line) { ctx.beginPath(); ctx.arc(cx,cy,size-LINE*scale/2,0,Math.PI*2); ctx.lineWidth = LINE*scale; ctx.strokeStyle = line; ctx.stroke(); }
+      const data = Uint8Array.from(atob(canvas.toDataURL('image/png').split(',')[1]),c => c.charCodeAt(0));
+      cornerCache.set(key,addMedia(data,'png'));
+    }
+    return para(picture(cornerCache.get(key),R0,R0,'Canto'),{align:pos.includes('L') ? 'left' : 'right'});
+  }
+  const edge = (line,sides) => line ? Object.fromEntries(sides.map(side => [side,{sz,color:line}])) : undefined;
+  // Monta um quadro arredondado: linhas internas [{fill, cells:[{w,content,v,mar,borders}], h, rule, divider}]
+  function card(rows,{line=null}={}) {
+    const first = rows[0].fill || '#ffffff', last = rows[rows.length-1].fill || '#ffffff';
+    const inner = rows[0].cells.reduce((t,c) => t+c.w,0);
+    const cap = (pos,fill) => ({h:R0,rule:'exact',cells:[
+      {w:R0,content:corner(pos+'L',fill,line)},
+      {w:inner,fill,borders:edge(line,[pos === 'T' ? 'top' : 'bottom'])},
+      {w:R0,content:corner(pos+'R',fill,line)}]});
+    const out = [cap('T',first)];
+    for (const row of rows) {
+      const fill = row.fill || '#ffffff';
+      const divider = row.divider && line ? {top:{sz,color:line}} : {};
+      out.push({h:row.h || 10,rule:row.rule || 'atLeast',cells:[
+        {w:R0,fill,borders:{...edge(line,['left']),...divider}},
+        ...row.cells.map(c => ({...c,fill:c.fill || fill,borders:{...(c.borders || {}),...divider}})),
+        {w:R0,fill,borders:{...edge(line,['right']),...divider}}]});
+    }
+    out.push(cap('B',last));
+    return out;
+  }
+  // Coloca dois quadros lado a lado, linha a linha
+  const side = (left,right,gap) => left.map((row,i) => ({h:Math.max(row.h,right[i].h),rule:row.rule === 'exact' && right[i].rule === 'exact' ? 'exact' : 'atLeast',
+    cells:[...row.cells,{w:gap},...right[i].cells]}));
+  const spacer = h => para('',{line:h});
+  const pageBreak = '<w:p><w:pPr><w:spacing w:after="0" w:line="20" w:lineRule="exact"/></w:pPr><w:r><w:br w:type="page"/></w:r></w:p>';
+  const FULL = R-L, INNER = FULL-2*R0;
+
+  // Cabeçalho BRAVA no corpo de cada página (mais fiel em todos os leitores do que o cabeçalho do Word)
+  const pageHead = () => table(card([{h:136,rule:'exact',cells:[
+    {w:300,v:'center',mar:[0,0,0,6],content:para(run('BRAVA',{bold:true,italic:true,size:60,color:navy}),{line:60})+para(run('energia',{size:17,color:'#6B6F86'}),{line:20,indL:158})},
+    {w:INNER-300-270,v:'center',content:para(run('REGISTRO DE EVIDÊNCIA',{bold:true,size:23}),{align:'center',line:28})},
+    {w:270,v:'center',borders:{left:{sz:12,color:navy}},content:
+      para(run('FORM-CORP-SMS-030',{bold:true,size:18}),{align:'center',line:34})+
+      para(run('GS2 – USO INTERNO',{bold:true,size:18}),{align:'center',line:34})+
+      para(run('Rev.: 00',{bold:true,size:18}),{align:'center',line:34})}]}],{line:navy}));
+
+  // ---- Página 1: formulário + avanço físico ----
+  const d = report.details;
+  const show = key => key === 'reportDate' ? dateFormat(d[key]) : (d[key] ?? '');
+  const c = [0,.27,.45,.63,1].map(f => Math.round(INNER*f));
+  const cw = i => c[i+1]-c[i];
+  const label = t => para(run(t,{bold:true,size:17}),{line:20});
+  const valueP = t => para(run(t,{bold:true,size:17,color:value}),{line:20});
+  const grid = {sz:6,color:ink};
+  const fc = (w,content,{right=true,bottom=true}={}) => ({w,content,v:'center',mar:[0,8,0,8],borders:{...(right?{right:grid}:{}),...(bottom?{bottom:grid}:{})}});
+  const formRows = card([
+    {h:46,rule:'exact',cells:[fc(cw(0),label(labels.department)),fc(cw(1),valueP(show('department'))),fc(cw(2),label(labels.origin)),fc(cw(3),valueP(show('origin')),{right:false})]},
+    {h:56,rule:'exact',cells:[fc(cw(0),label(labels.reference)),fc(cw(1),valueP(show('reference'))),fc(cw(2),label(labels.type)),fc(cw(3),valueP(show('type')),{right:false})]},
+    {h:48,rule:'exact',cells:[fc(cw(0),label(labels.owner)),fc(cw(1),valueP(show('owner'))),fc(cw(2),label(labels.reportDate)),fc(cw(3),valueP(show('reportDate')),{right:false})]},
+    {h:64,rule:'exact',cells:[fc(cw(0),label(labels.evidence)),fc(c[4]-c[1],para(run(evidenceText(d.evidence),{size:17}),{line:21}),{right:false})]},
+    {h:44,rule:'exact',cells:[fc(c[2],para(run(labels.summary+' ',{bold:true,size:17})+run(d.summary ?? '',{size:17}),{line:20}),{bottom:false}),
+      fc(c[4]-c[2],para(run('Período: ',{bold:true,size:17})+run('de '+period,{size:17}),{line:20}),{right:false,bottom:false})]}
+  ],{line:ink});
+  const projects = projectProgress(report);
+  const cols = Math.max(1,Math.ceil(projects.length/12)), rowsN = Math.ceil(projects.length/cols);
+  const colW = (INNER-20)/cols, rh = Math.min(74,880/Math.max(1,rowsN));
+  const chart = [{fill:'#f7f7fa',h:50,rule:'exact',cells:[{w:INNER,v:'center',content:para(run('AVANÇO FÍSICO DOS PROJETOS',{bold:true,size:22,color:navyBlue}),{align:'center',line:28})}]}];
+  if (!projects.length) chart.push({fill:'#f7f7fa',h:60,cells:[{w:INNER,v:'center',content:para(run('Nenhuma atividade registrada.',{size:20}),{align:'center',line:24})}]});
+  for (let r=0; r<rowsN; r++) {
+    const cells = [{w:10}];
+    for (let k=0; k<cols; k++) {
+      const item = projects[k*rowsN+r];
+      if (!item) { cells.push({w:colW}); continue; }
+      const pct = item.value === null ? 'Não informado' : item.value+'%';
+      cells.push({w:colW,content:
+        para(run(item.name,{bold:true,size:17,color:navyBlue})+tab+run(pct,{bold:true,size:16,color:navyBlue}),{line:22,tabs:[{align:'right',pos:colW-12}]})+
+        (item.value === null ? para('',{line:14}) : para(bar(colW-25,12,item.value,'project'),{line:14,before:2}))+
+        para(run(item.count+' registros fotográficos',{size:13,color:'#77758a'}),{line:18,before:2})});
+    }
+    cells.push({w:10});
+    chart.push({fill:'#f7f7fa',h:rh,rule:'exact',cells});
+  }
+  const totals = [['Atividades',projects.length],['Fotografias',report.pages.flat().filter(s => s.image).length],['Concluídas',projects.filter(s => s.value === 100).length]];
+  chart.push({fill:'#f7f7fa',h:66,rule:'exact',cells:totals.map(([t,n],i) => ({w:i < 2 ? Math.round(INNER/3) : INNER-2*Math.round(INNER/3),v:'center',
+    content:para(run(String(n),{bold:true,size:28,color:navyBlue}),{align:'center',line:32})+para(run(t,{size:16,color:navyBlue}),{align:'center',line:22})}))});
+  const firstPage = pageHead()+spacer(14)+para(run('FORMULÁRIO',{bold:true,size:21}),{align:'center',line:34})+
+    table(formRows)+spacer(24)+table(card(chart,{line:navyBlue}));
+
+  // ---- Páginas de fotos: 4 por página ----
+  const gapX = 16, w = (FULL-gapX)/2, wi = w-2*R0, PH = 400;
+  const hasProgress = s => s && s.progress !== undefined && s.progress !== null && s.progress !== '' && Number.isFinite(Number(s.progress));
+  const hasContent = s => s && (s.image || [s.date,s.company,s.place,s.description,s.activity,s.progress,s.serviceProgress].some(v => String(v ?? '').trim()));
+  async function photoContent(slot,boxW,boxH,labelText) {
+    if (!slot.image?.url) return para('',{align:'center',line:boxH});
+    const img = new Image();
+    img.src = slot.image.url;
+    await img.decode();
+    const k = Math.min(boxW/img.width,boxH/img.height);
+    const png = /^data:image\/png/.test(slot.image.url);
+    const id = addMedia(Uint8Array.from(atob(slot.image.url.split(',')[1]),ch => ch.charCodeAt(0)),png ? 'png' : 'jpeg');
+    return para(picture(id,img.width*k,img.height*k,labelText),{align:'center'});
+  }
+  const pages = [];
+  for (const [pageIndex,slots] of report.pages.entries()) {
+    let html = pageHead()+spacer(18);
+    for (const [blockIndex,pair] of [[slots[0],slots[1]],[slots[2],slots[3]]].entries()) {
+      if (!pair.some(hasContent)) continue;
+      const hasActivity = pair.some(s => s?.activity?.trim());
+      const showProgress = pair.some(hasProgress);
+      const metas = pair.map(s => card([{fill:navyBlue,h:42,rule:'exact',cells:[{w:wi,v:'center',mar:[0,4,0,4],content:
+        para(run('Dia ',{bold:true,size:18,color:neonGreen})+run(dateFormat(s.date),{bold:true,size:18,color:neonGreen}),{line:21})+
+        para(run('Empresa: ',{size:16,color:'#ffffff'})+run(s.company ?? '',{bold:true,size:16,color:'#ffffff'}),{line:20})}]}]));
+      const cards = [];
+      for (const [i,s] of pair.entries()) {
+        let band = para(run('Local: ',{bold:true,size:21,color:neonGreen})+run(s.place ?? '',{bold:true,size:21,color:neonGreen}),{line:28});
+        if (hasActivity) band += para(s.activity?.trim() ? run('Atividade: '+s.activity,{bold:true,size:14,color:'#ffffff'}) : '',{line:18});
+        if (showProgress) {
+          const p = hasProgress(s) ? Math.max(0,Math.min(100,Number(s.progress))) : null;
+          band += para(p === null ? '' : run('Avanço '+p+'%',{bold:true,size:13,color:'#ffffff'})+tab+bar(wi-135,7,p,'band'),{line:18,tabs:[{align:'left',pos:111}]});
+        }
+        const service = s.serviceProgress != null && String(s.serviceProgress) !== '';
+        const n = service ? Math.max(0,Math.min(100,Number(s.serviceProgress) || 0)) : 0;
+        let desc = para(run(s.description ?? '',{bold:true,size:17,color:navyBlue}),{line:19,before:4});
+        if (service) desc += para(run('Serviço '+n+'%',{bold:true,size:13,color:navyBlue})+tab+bar(wi-125,7,n,'service'),{line:20,before:4,tabs:[{align:'left',pos:101}]});
+        cards.push(card([
+          {fill:navyBlue,h:28+(hasActivity?18:0)+(showProgress?18:0),rule:'exact',cells:[{w:wi,content:band}]},
+          {fill:'#ffffff',h:PH,rule:'exact',cells:[{w:wi,v:'center',content:await photoContent(s,wi-4,PH-12,'Foto '+(pageIndex*4+blockIndex*2+i+1))}]},
+          {fill:neonGreen,h:66,rule:'exact',divider:true,cells:[{w:wi,content:desc}]}
+        ],{line:navyBlue}));
+      }
+      html += table(side(metas[0],metas[1],gapX))+spacer(6)+table(side(cards[0],cards[1],gapX))+spacer(18);
+    }
+    pages.push(pageBreak+html);
+  }
+
+  // ---- Rodapé simples do Word (se repete em todas as páginas) ----
+  const field = instr => '<w:fldSimple w:instr=" '+instr+' ">'+run('1',{bold:true,size:18,color:navy})+'</w:fldSimple>';
+  const footer = '<w:ftr '+wordNamespaces+'>'+
+    para(run('BRAVA ENERGIA',{bold:true,size:18,color:navy})+tab+run('Pág. ',{bold:true,size:18,color:navy})+field('PAGE')+run(' de ',{bold:true,size:18,color:navy})+field('NUMPAGES'),
+      {line:30,indL:65,indR:65,top:{sz:12,color:navy},tabs:[{align:'right',pos:R-L-130}]})+
+    para(run('DOCUMENTOS IMPRESSOS SÃO CONSIDERADOS CÓPIAS NÃO CONTROLADAS',{size:14,color:'#8C8C99',spacing:29}),{align:'center',line:28,before:6})+'</w:ftr>';
+  const sect = '<w:sectPr><w:footerReference w:type="default" r:id="rId3"/>'+
+    '<w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="'+tw(26)+'" w:right="'+(11906-tw(L)-tw(R-L))+'" w:bottom="'+tw(120)+'" w:left="'+tw(L)+'" w:header="'+tw(20)+'" w:footer="'+tw(36)+'" w:gutter="0"/></w:sectPr>';
+  const header = '<w:hdr '+wordNamespaces+'>'+para('',{line:1})+'</w:hdr>';
+  files['word/document.xml'] = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document '+wordNamespaces+'><w:body>'+
+    firstPage+pages.join('')+para('',{line:1})+sect+'</w:body></w:document>';
+  files['word/header1.xml'] = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'+header;
+  files['word/footer1.xml'] = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'+footer;
+  files['word/styles.xml'] = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'+
+    '<w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial" w:cs="Arial" w:eastAsia="Arial"/><w:sz w:val="17"/><w:szCs w:val="17"/><w:lang w:val="pt-BR"/></w:rPr></w:rPrDefault>'+
+    '<w:pPrDefault><w:pPr><w:spacing w:after="0" w:line="240" w:lineRule="auto"/></w:pPr></w:pPrDefault></w:docDefaults>'+
+    '<w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/></w:style>'+
+    '<w:style w:type="table" w:default="1" w:styleId="TableNormal"><w:name w:val="Normal Table"/><w:tblPr><w:tblInd w:w="0" w:type="dxa"/><w:tblCellMar><w:top w:w="0" w:type="dxa"/><w:left w:w="0" w:type="dxa"/><w:bottom w:w="0" w:type="dxa"/><w:right w:w="0" w:type="dxa"/></w:tblCellMar></w:tblPr></w:style></w:styles>';
+  files['word/settings.xml'] = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:settings xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'+
+    '<w:defaultTabStop w:val="708"/><w:compat><w:compatSetting w:name="compatibilityMode" w:uri="http://schemas.microsoft.com/office/word" w:val="15"/></w:compat></w:settings>';
+  files['word/_rels/document.xml.rels'] = relationships(
+    relationship('rId1','styles','styles.xml')+relationship('rId2','header','header1.xml')+relationship('rId3','footer','footer1.xml')+
+    relationship('rId4','settings','settings.xml')+links.join(''));
+  files['_rels/.rels'] = relationships(relationship('rId1','officeDocument','word/document.xml'));
+  files['[Content_Types].xml'] = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'+
+    '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/>'+
+    '<Default Extension="png" ContentType="image/png"/><Default Extension="jpeg" ContentType="image/jpeg"/>'+
+    '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>'+
+    '<Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>'+
+    '<Override PartName="/word/settings.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.settings+xml"/>'+
+    '<Override PartName="/word/header1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/>'+
+    '<Override PartName="/word/footer1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footer+xml"/></Types>';
+  return new File(zip(files),name+'.docx',{type:wordMime});
 }
+const wordNamespaces = 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" '+
+  'xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" '+
+  'xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture" xmlns:wps="http://schemas.microsoft.com/office/word/2010/wordprocessingShape" '+
+  'xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"';
 
 function packageWord(files,links,body,name,margin) {
   files['word/document.xml']='<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"><w:body>'+body+'<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="'+margin+'" w:right="'+margin+'" w:bottom="'+margin+'" w:left="'+margin+'" w:header="0" w:footer="0" w:gutter="0"/></w:sectPr></w:body></w:document>';
