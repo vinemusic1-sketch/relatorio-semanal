@@ -4,8 +4,8 @@ const jpeg = url => Uint8Array.from(atob(url.split(',')[1]), character => charac
 const wordMime = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 
 const ink = '#000000', value = '#2E74B5', yellow = '#FFFF00', navy = '#1B2A8C';
-// Cores BRAVA dos quadros de foto: cabeçalho azul com texto verde; rodapé verde com texto azul.
-const bravaBlue = '#190A60', bravaGreen = '#CEFF00';
+// Cores dos quadros de foto: cabeçalho azul com texto verde; rodapé verde com texto azul.
+const navyBlue = '#190A60', neonGreen = '#CEFF00';
 const W = 1240, H = 1754, L = 85, R = 1155, MID = 620;
 const labels = {
   department:'Gerência:', origin:'Origem da Ação:', reference:'Código de Referência da Ação:', type:'Tipo da ação:',
@@ -68,8 +68,7 @@ export async function renderSheets(report, fields, period, dateFormat) {
     }
 
     // Cabeçalho de página
-    text('BRAVA',L-5,118,62,{bold:true,italic:true,color:navy});
-    text('energia',L+150,140,17,{color:'#6B6F86'});
+    text('RL',L-5,118,62,{bold:true,italic:true,color:navy});
     text('REGISTRO DE EVIDÊNCIA',555,98,23,{bold:true,align:'center'});
     ctx.fillStyle=navy; ctx.fillRect(885,30,2,140);
     text('FORM-CORP-SMS-030',1025,70,18,{bold:true,align:'center'});
@@ -130,10 +129,10 @@ export async function renderSheets(report, fields, period, dateFormat) {
       const ph=Math.min(blockH-metaH-8-band-desc-28,450);
       for (const [index,slot] of pair.entries()) {
         const x=index ? L+w+gap : L;
-        // Dia e Empresa: etiqueta azul BRAVA, data em verde e empresa em branco.
-        rounded(x,y0,w,metaH,12); ctx.fillStyle=bravaBlue; ctx.fill();
-        const wd=text('Dia ',x+14,y0+21,18,{bold:true,color:bravaGreen});
-        text(dateFormat(slot.date),x+14+wd,y0+21,18,{bold:true,color:bravaGreen});
+        // Dia e Empresa: etiqueta azul, data em verde e empresa em branco.
+        rounded(x,y0,w,metaH,12); ctx.fillStyle=navyBlue; ctx.fill();
+        const wd=text('Dia ',x+14,y0+21,18,{bold:true,color:neonGreen});
+        text(dateFormat(slot.date),x+14+wd,y0+21,18,{bold:true,color:neonGreen});
         const we=text('Empresa: ',x+14,y0+42,16,{color:'#ffffff'});
         text(slot.company ?? '',x+14+we,y0+42,16,{bold:true,color:'#ffffff',max:w-28-we});
         // Quadro da foto com cantos arredondados: faixa azul, foto e rodapé verde.
@@ -141,8 +140,8 @@ export async function renderSheets(report, fields, period, dateFormat) {
         ctx.save();
         rounded(x,ty,w,h,radius); ctx.clip();
         ctx.fillStyle='#ffffff'; ctx.fillRect(x,ty,w,h);
-        ctx.fillStyle=bravaBlue; ctx.fillRect(x,ty,w,band);
-        ctx.fillStyle=bravaGreen; ctx.fillRect(x,ty+band+ph,w,desc);
+        ctx.fillStyle=navyBlue; ctx.fillRect(x,ty,w,band);
+        ctx.fillStyle=neonGreen; ctx.fillRect(x,ty+band+ph,w,desc);
         if (slot.image) {
           const img=new Image();
           img.src=slot.image.url;
@@ -152,11 +151,11 @@ export async function renderSheets(report, fields, period, dateFormat) {
           ctx.drawImage(img,x+(w-iw)/2,ty+band+(ph-ih)/2,iw,ih);
         }
         ctx.restore();
-        rounded(x,ty,w,h,radius); ctx.strokeStyle=bravaBlue; ctx.lineWidth=2; ctx.stroke();
-        ctx.fillStyle=bravaBlue; ctx.fillRect(x,ty+band+ph-1,w,2);
-        const wl=text('Local: ',x+14,ty+28,21,{bold:true,color:bravaGreen});
-        text(slot.place ?? '',x+14+wl,ty+28,21,{bold:true,color:bravaGreen,max:w-28-wl});
-        font(17,true); ctx.fillStyle=bravaBlue;
+        rounded(x,ty,w,h,radius); ctx.strokeStyle=navyBlue; ctx.lineWidth=2; ctx.stroke();
+        ctx.fillStyle=navyBlue; ctx.fillRect(x,ty+band+ph-1,w,2);
+        const wl=text('Local: ',x+14,ty+28,21,{bold:true,color:neonGreen});
+        text(slot.place ?? '',x+14+wl,ty+28,21,{bold:true,color:neonGreen,max:w-28-wl});
+        font(17,true); ctx.fillStyle=navyBlue;
         wrap(ctx,slot.description ?? '',x+14,ty+band+ph+26,w-28,21,3);
       }
       contentEnd=ty+band+ph+desc;
@@ -168,7 +167,7 @@ export async function renderSheets(report, fields, period, dateFormat) {
 
     // Rodapé
     ctx.fillStyle=navy; ctx.fillRect(150,1648,940,2);
-    text('BRAVA ENERGIA',150,1682,18,{bold:true,color:navy});
+    text('RELATÓRIO SEMANAL',150,1682,18,{bold:true,color:navy});
     text('Pág. '+(pageIndex+1)+' de '+total,1090,1682,18,{bold:true,color:navy,align:'right'});
     spaced('DOCUMENTOS IMPRESSOS SÃO CONSIDERADOS CÓPIAS NÃO CONTROLADAS',W/2,1730,14,'#8C8C99',3);
     return canvas;

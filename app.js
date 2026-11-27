@@ -436,7 +436,7 @@ function pageHeader() {
   head.className = 'lp-head';
   const logo = create('div');
   logo.className = 'lp-logo';
-  logo.append(create('b','BRAVA'),create('small','energia'));
+  logo.append(create('b','RL'));
   const title = create('div','REGISTRO DE EVIDÊNCIA');
   title.className = 'lp-title';
   const code = create('div');
@@ -534,7 +534,7 @@ function livePage(page,pageIndex,report) {
   }
   const foot = create('div');
   foot.className = 'lp-foot';
-  foot.append(create('b','BRAVA ENERGIA'),create('b','Pág. '+(pageIndex+1)+' de '+report.pages.length));
+  foot.append(create('b','RELATÓRIO SEMANAL'),create('b','Pág. '+(pageIndex+1)+' de '+report.pages.length));
   const note = create('div','DOCUMENTOS IMPRESSOS SÃO CONSIDERADOS CÓPIAS NÃO CONTROLADAS');
   note.className = 'lp-note';
   sheetEl.append(frame,foot,note);
@@ -575,7 +575,7 @@ $('view').onclick = async () => {
       !slot.image && ![slot.date,slot.company,slot.place,slot.description].some(value => value?.trim()))) {
       report.pages.pop();
     }
-    const name = 'Registro-Semanal-BRAVA-'+report.start;
+    const name = 'Relatorio-Semanal-'+report.start;
     sheets = await renderSheets(report, fields, period(report.start), fmt);
     [pdfFile,wordFile] = await Promise.all([makePDF(sheets,name),Promise.resolve(makeWord(sheets,name))]);
     $('report').replaceChildren(...sheets.map((sheet,index) => {

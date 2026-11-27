@@ -65,13 +65,13 @@
 .sheet-grid label,.sheet-grid .pick-line,.sheet-grid input{min-width:0;max-width:100%}
 input[type=date]{-webkit-appearance:none;appearance:none;display:block;min-height:2.75rem;min-width:0;max-width:100%;text-align:left}
 input[type=date]::-webkit-date-and-time-value{text-align:left}
-/* Cores BRAVA nos quadros de foto */
+/* Cores nos quadros de foto */
 .live-page .lp-band{background:#190A60;color:#CEFF00}
 .live-page .lp-desc{background:#CEFF00;color:#190A60;font-weight:700}
 .lp-desc.empty{color:#190A60;opacity:.75}
 .sheet-place input{background:#190A60;color:#CEFF00}
 .slot-sheet textarea{background:#CEFF00;color:#190A60;font-weight:700}
-/* Cantos arredondados e etiqueta Dia/Empresa no padrão BRAVA */
+/* Cantos arredondados e etiqueta Dia/Empresa  */
 .lp-frame{border-radius:1.8cqw}
 .lp-row{gap:1.6cqw}
 .lp-cell{grid-template-rows:auto auto 1fr 7cqw 0}
