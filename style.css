@@ -112,3 +112,23 @@ input[type=date]::-webkit-date-and-time-value{text-align:left}
 .live-page .lp-band{white-space:normal;display:grid;gap:.45cqw;align-content:start}.lp-location,.lp-activity{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.lp-activity{color:#fff;font-size:1.55cqw}.lp-progress{display:flex;align-items:center;gap:1cqw;font-size:1.45cqw;color:white;white-space:nowrap}.lp-progress-track{height:1.1cqw;flex:1;background:#51488a;border-radius:1cqw;overflow:hidden}.lp-progress-fill{display:block;height:100%;background:linear-gradient(90deg,#ff6955,#ffd84a 45%,#ceff00);border-radius:1cqw}.lp-progress-track{container-type:inline-size}.lp-progress-fill{background-size:100cqw 100%}
 
 .live-page .lp-band{gap:.2cqw;padding:.55cqw 1.2cqw}.lp-activity{font-size:1.3cqw}.lp-progress{font-size:1.25cqw}.lp-progress-track{height:.65cqw}
+
+/* Editor compacto, independente do visor da câmera */
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
+input,textarea,select{font-size:16px!important}
+.slot-sheet.edit-sheet{position:fixed;inset:var(--edit-top,0px) 0 auto;margin:0 auto;width:min(640px,100%);height:var(--edit-height,100dvh);max-height:var(--edit-height,100dvh);max-width:100%;border-radius:0;padding:0;overflow:hidden;background:white}
+.edit-sheet[open]{display:flex;flex-direction:column}
+.edit-sheet .sheet-head{flex:none;margin:0;padding:calc(8px + env(safe-area-inset-top)) 12px 8px;background:#fff;border-bottom:1px solid #dedbea;z-index:1}
+.edit-sheet .sheet-head h3{font-size:14px}
+.edit-sheet .sheet-head button{min-height:38px;font-size:14px;padding:6px 14px}
+.edit-content{flex:1;min-height:0;overflow:auto;overscroll-behavior:contain;padding:10px 12px calc(12px + env(safe-area-inset-bottom));scroll-padding:12px}
+.edit-content>img{display:block;width:100%;height:100px;object-fit:contain;margin:0 auto 8px;background:#f4f3f9;border-radius:6px}
+.edit-sheet.keyboard-open .edit-content>img{display:none}
+.edit-content label{font-size:12px;font-weight:600;gap:3px;margin-bottom:7px}
+.edit-content input,.edit-content select,.edit-content textarea{font-weight:400;padding:7px 8px;min-height:38px;line-height:1.2;border-radius:6px}
+.edit-content textarea{min-height:76px;resize:vertical}
+.edit-content .sheet-grid{grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px;align-items:end}
+.edit-content .sheet-place input,.edit-content textarea{background:#fff;color:#190a60}
+.edit-content .tools{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:5px}
+.edit-content .tools button{font-size:12px;min-height:36px;padding:5px}
+.edit-content input[type=date]{min-height:38px;font-size:16px!important}

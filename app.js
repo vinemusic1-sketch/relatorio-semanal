@@ -1,5 +1,5 @@
-import { openCamera } from './camera.js?v=19';
-import { renderSheets, makePDF, makeWord } from './exports.js?v=19';
+import { openCamera } from './camera.js?v=20';
+import { renderSheets, makePDF, makeWord } from './exports.js?v=20';
 const $ = id => document.getElementById(id);
 const create = (tag, text) => {
   const element = document.createElement(tag);
@@ -328,7 +328,7 @@ function askPhoto(slot,report,label,camera=false) {
 // ---- Folha de edição de uma foto ----
 const sheet = (() => {
   const dialog = create('dialog');
-  dialog.className = 'slot-sheet';
+  dialog.className = 'slot-sheet edit-sheet';
   const title = create('h3');
   const close = create('button','Concluir');
   close.className = 'primary';
@@ -391,7 +391,28 @@ const sheet = (() => {
   const copy = create('button','Copiar texto do carimbo');
   const remove = create('button','Remover foto');
   tools.append(change,camera,original,read,copy,remove);
-  dialog.append(head,preview,status,grid,place,activity,progress,description,tools);
+  const content=create('div');content.className='edit-content';
+  content.append(preview,status,grid,place,activity,progress,description,tools);
+  dialog.append(head,content);
+  const viewport=window.visualViewport;
+  function fitEditor(){
+    if(!dialog.open)return;
+    const h=viewport?.height||window.innerHeight;
+    dialog.style.setProperty('--edit-height',h+'px');
+    dialog.style.setProperty('--edit-top',(viewport?.offsetTop||0)+'px');
+    dialog.classList.toggle('keyboard-open',window.innerHeight-h>120);
+    const active=document.activeElement;
+    if(content.contains(active)&&active.matches('input,textarea,select')){
+      const a=active.getBoundingClientRect(),c=content.getBoundingClientRect();
+      if(a.bottom>c.bottom-12)content.scrollTop+=a.bottom-c.bottom+12;
+      else if(a.top<c.top+8)content.scrollTop-=c.top+8-a.top;
+    }
+  }
+  viewport?.addEventListener('resize',fitEditor);
+  viewport?.addEventListener('scroll',fitEditor);
+  window.addEventListener('resize',fitEditor);
+  content.addEventListener('focusin',()=>{requestAnimationFrame(fitEditor);setTimeout(fitEditor,350);});
+  content.addEventListener('focusout',()=>setTimeout(fitEditor,350));
   document.body.append(dialog);
   const api = {
     slot:null, report:null,
@@ -400,6 +421,7 @@ const sheet = (() => {
       title.textContent = label;
       api.sync(true);
       if (!dialog.open) dialog.showModal();
+      fitEditor();
     },
     sync(all=false) {
       const slot = api.slot;
