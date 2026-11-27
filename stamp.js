@@ -134,7 +134,7 @@ async function readStamp(image,known,debug) {
     found.company ||= parsed.company;
     if (!found.place && (stampHere || knownPlace)) found.place = parsed.place;
     if (debug) debug.push({left,right,text,parsed});
-    if (found.date && found.place) break;
+    // Continue os recortes para reconhecer a descrição.
   }
   return {...found,text:texts.join('\n').trim()};
 }

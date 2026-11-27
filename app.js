@@ -1,6 +1,6 @@
 function projectProgress(report){const m=new Map();for(const s of report.pages.flat()){const name=s.activity?.trim();if(!name||s.progress==null||s.progress===''||!Number.isFinite(Number(s.progress)))continue;const k=name.toLocaleLowerCase('pt-BR');if(!m.has(k)||(s.date||'')>=m.get(k).date)m.set(k,{name,value:Number(s.progress),date:s.date||''});}return [...m.values()];}
-import { openCamera } from './camera.js?v=25';
-import { renderSheets, makePDF, makeWord } from './exports.js?v=25';
+import { openCamera } from './camera.js?v=26';
+import { renderSheets, makePDF, makeWord } from './exports.js?v=26';
 const $ = id => document.getElementById(id);
 const create = (tag, text) => {
   const element = document.createElement(tag);
@@ -247,7 +247,8 @@ async function readStamp(slot,report,photo,version,manual=false) {
   state.message = 'Lendo o carimbo da foto…';
   refreshSlot(slot);
   try {
-    const {readStampInfo} = await import('./stamp.js');
+    if(photo.stampDescription){state.text=photo.stampText||photo.stampDescription;if(!slot.description?.trim())userChange(slot,report,'description',photo.stampDescription);state.message='Descrição do carimbo preenchida.';return;}
+    const {readStampInfo} = await import('./stamp.js?v=26');
     const result = await readStampInfo(photo,{places:savedOptions('place'),companies:savedOptions('company')});
     if (version !== state.version || slot.image !== photo) return;
     state.text = result.text;photo.stampText=result.text;persist(report);
@@ -257,6 +258,11 @@ async function readStamp(slot,report,photo,version,manual=false) {
     }
     if (result.place && canReplace(slot,'place')) { setAuto(slot,'place',result.place,'stamp'); filled.push('Local'); }
     if (result.company && canReplace(slot,'company')) { setAuto(slot,'company',result.company,'stamp'); filled.push('Empresa'); }
+    const norm=s=>String(s||'').normalize('NFD').replace(/\p{M}/gu,'').toLowerCase().replace(/[^a-z0-9]/g,'');
+    const excluded=[norm(slot.place),norm(slot.company)].filter(Boolean);
+    const lines=(result.text||'').split(/\r?\n/).map(s=>s.trim()).filter(s=>s&&!/^(GPS|latitude|longitude)\b/i.test(s)&&!/\d{1,2}[\/.-]\d{1,2}[\/.-]\d{2,4}|\d{1,2}:\d{2}|-?\d+[.,]\d{4,}/.test(s)&&!excluded.includes(norm(s))&&/\p{L}{3}/u.test(s));
+    const description=[...new Map(lines.map(s=>[norm(s),s])).values()].join('\n');
+    if(description&&!slot.description?.trim()){userChange(slot,report,'description',description);filled.push('Descrição');}
     if (filled.length) {
       persist(report);
       state.message = filled.join(', ')+' lido'+(filled.length > 1 ? 's' : '')+' do carimbo. Confira e ajuste se precisar.';
@@ -293,7 +299,7 @@ function addPhoto(slot,report,file,capture=null) {
     }
     persist(report);
     refreshSlot(slot);
-    if(capture){state.reading=false;state.message='Timestamp registrado na captura.';refreshSlot(slot);}else await readStamp(slot,report,photo,version);
+    if(capture){if(photo.stampDescription&&!slot.description?.trim())userChange(slot,report,'description',photo.stampDescription);state.reading=false;state.message='Timestamp registrado na captura.';refreshSlot(slot);}else await readStamp(slot,report,photo,version);
   }).catch(() => {
     state.reading = false;
     state.message = 'Não foi possível abrir essa imagem. Tente outra foto.';
