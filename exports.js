@@ -44,8 +44,8 @@ function evidenceText(selected) {
 
 export async function renderSheets(report, fields, period, dateFormat) {
   // Mantém 4 fotos por página, em duas linhas de duas fotos, como no FORM-CORP-SMS-030.
-  const total = report.pages.length;
-  return Promise.all(report.pages.map(async (slots,pageIndex) => {
+  const total = report.pages.length+1;
+  return Promise.all([null,...report.pages].map(async (slots,pageIndex) => {
     const canvas = document.createElement('canvas');
     canvas.width=W; canvas.height=H;
     const ctx=canvas.getContext('2d');
@@ -78,6 +78,7 @@ export async function renderSheets(report, fields, period, dateFormat) {
     text('Rev.: 00',1025,142,18,{bold:true,align:'center'});
     ctx.fillRect(L-10,168,R-L+20,3);
 
+    rounded(L-12,22,R-L+24,158,14);ctx.strokeStyle=navy;ctx.lineWidth=1.5;ctx.stroke();
     let top=200;
     if (pageIndex === 0) {
       text('FORMULÁRIO',W/2,228,21,{bold:true,align:'center'});
@@ -111,7 +112,7 @@ export async function renderSheets(report, fields, period, dateFormat) {
       box(670,y,c[4]-670,48);
       const pw=text('Período: ',680,y+30,17,{bold:true});
       text('de '+period.replace(' a ',' a '),680+pw,y+30,17,{max:c[4]-690-pw});
-      top=y+48+28;const projects=projectProgress(report);if(projects.length){text('AVANÇO FÍSICO DOS PROJETOS',L,top+15,15,{bold:true,color:navyBlue});top+=22;const cols=Math.ceil(projects.length/5),rows=Math.ceil(projects.length/cols),cw=(R-L)/cols;projects.forEach((item,i)=>{const x=L+Math.floor(i/rows)*cw,yy=top+(i%rows)*19;text(item.name,x,yy+13,12,{max:cw*.48});const bx=x+cw*.5,bw=cw*.35;ctx.fillStyle='#dedbea';ctx.fillRect(bx,yy+4,bw,8);ctx.fillStyle='#8eb900';ctx.fillRect(bx,yy+4,bw*item.value/100,8);text(item.value+'%',x+cw*.87,yy+13,12,{bold:true});});top+=rows*19+12;}
+      top=y+48+28;const projects=projectProgress(report);if(projects.length){text('AVANÇO FÍSICO DOS PROJETOS',L,top+15,15,{bold:true,color:navyBlue});top+=22;const cols=Math.ceil(projects.length/18),rows=Math.ceil(projects.length/cols),cw=(R-L)/cols;projects.forEach((item,i)=>{const x=L+Math.floor(i/rows)*cw,yy=top+(i%rows)*42;text(item.name,x,yy+13,12,{max:cw*.48});const bx=x+cw*.5,bw=cw*.35;ctx.fillStyle='#dedbea';ctx.fillRect(bx,yy+4,bw,8);ctx.fillStyle='#8eb900';ctx.fillRect(bx,yy+4,bw*item.value/100,8);text(item.value+'%',x+cw*.87,yy+13,12,{bold:true});});top+=rows*42+12;}
     }
 
     const bottom=1605;
@@ -174,10 +175,10 @@ export async function renderSheets(report, fields, period, dateFormat) {
       }
       contentEnd=ty+band+ph+desc;
     }
-    await drawRow([slots[0],slots[1]],top);
+    if(slots){await drawRow([slots[0],slots[1]],top);
     await drawRow([slots[2],slots[3]],top+blockH);
     rounded(L-10,top-14,R-L+20,Math.max(contentEnd,top+40)-top+28,18);
-    ctx.strokeStyle=ink; ctx.lineWidth=1.5; ctx.stroke();
+    ctx.strokeStyle=ink; ctx.lineWidth=1.5; ctx.stroke();}
 
     // Rodapé
     ctx.fillStyle=navy; ctx.fillRect(150,1648,940,2);
@@ -229,22 +230,24 @@ function wordPage(sheet,index) {
     '<pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext '+size+'/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom>'+
     '</pic:spPr></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>';
 }
-export function makeWord(report,name,period,dateFormat) {
+export function makeWord(report,name,period,dateFormat,sheets) {
   const files={},links=[]; let id=0;
   const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&apos;'}[c]));
-  const p=(v,{color='190A60',bold=false,size=18,shade='',center=false}={})=>'<w:p><w:pPr><w:spacing w:before="0" w:after="35"/>'+(center?'<w:jc w:val="center"/>':'')+(shade?'<w:shd w:fill="'+shade+'"/>':'')+'</w:pPr><w:r><w:rPr><w:color w:val="'+color+'"/><w:sz w:val="'+size+'"/>'+(bold?'<w:b/>':'')+'</w:rPr><w:t xml:space="preserve">'+esc(v)+'</w:t></w:r></w:p>';
-  const cell=(content,width,shade='')=>'<w:tc><w:tcPr><w:tcW w:w="'+width+'" w:type="dxa"/>'+(shade?'<w:shd w:fill="'+shade+'"/>':'')+'</w:tcPr>'+content+'</w:tc>';
-  const table=(rows,widths)=>'<w:tbl><w:tblPr><w:tblW w:w="'+widths.reduce((a,b)=>a+b,0)+'" w:type="dxa"/><w:tblLayout w:type="fixed"/></w:tblPr><w:tblGrid>'+widths.map(w=>'<w:gridCol w:w="'+w+'"/>').join('')+'</w:tblGrid>'+rows.map(row=>'<w:tr><w:trPr><w:cantSplit/></w:trPr>'+row+'</w:tr>').join('')+'</w:tbl>';
-  function photo(s,maxH){
+  const p=(v,{color='190A60',bold=false,size=18,shade='',center=false}={})=>'<w:p><w:pPr><w:spacing w:before="0" w:after="35"/>'+(center?'<w:jc w:val="center"/>':'')+(shade?'<w:shd w:val="clear" w:color="auto" w:fill="'+shade+'"/>':'')+'</w:pPr><w:r><w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial"/><w:color w:val="'+color+'"/><w:sz w:val="'+size+'"/>'+(bold?'<w:b/>':'')+'</w:rPr><w:t xml:space="preserve">'+esc(v)+'</w:t></w:r></w:p>';
+  const cell=(content,width,shade='')=>'<w:tc><w:tcPr><w:tcW w:w="'+width+'" w:type="dxa"/>'+(shade?'<w:shd w:val="clear" w:color="auto" w:fill="'+shade+'"/>':'')+'</w:tcPr>'+content+'</w:tc>';
+  const table=(rows,widths)=>'<w:tbl><w:tblPr><w:tblW w:w="'+widths.reduce((a,b)=>a+b,0)+'" w:type="dxa"/><w:tblLayout w:type="fixed"/><w:tblBorders><w:top w:val="single" w:sz="8" w:color="190A60"/><w:left w:val="single" w:sz="8" w:color="190A60"/><w:bottom w:val="single" w:sz="8" w:color="190A60"/><w:right w:val="single" w:sz="8" w:color="190A60"/><w:insideH w:val="single" w:sz="8" w:color="190A60"/><w:insideV w:val="single" w:sz="8" w:color="190A60"/></w:tblBorders></w:tblPr><w:tblGrid>'+widths.map(w=>'<w:gridCol w:w="'+w+'"/>').join('')+'</w:tblGrid>'+rows.map(row=>'<w:tr><w:trPr><w:cantSplit/></w:trPr>'+row+'</w:tr>').join('')+'</w:tbl>';
+  function photo(s,maxH,maxW=3150000){
     if(!s.image?.url)return p('');
     const n=++id,path='media/foto-'+n+'.jpg';files['word/'+path]=jpeg(s.image.url);links.push(relationship('rId'+n,'image',path));
-    const w=s.image.width||1400,h=s.image.height||1050,scale=Math.min(3150000/w,maxH/h),size='cx="'+Math.round(w*scale)+'" cy="'+Math.round(h*scale)+'"';
+    const w=s.image.width||1400,h=s.image.height||1050,scale=Math.min(maxW/w,maxH/h),size='cx="'+Math.round(w*scale)+'" cy="'+Math.round(h*scale)+'"';
     return '<w:p><w:pPr><w:jc w:val="center"/><w:spacing w:after="0"/></w:pPr><w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0"><wp:extent '+size+'/><wp:docPr id="'+n+'" name="Foto '+n+'"/><wp:cNvGraphicFramePr><a:graphicFrameLocks noChangeAspect="1"/></wp:cNvGraphicFramePr><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic><pic:nvPicPr><pic:cNvPr id="'+n+'" name="Foto '+n+'"/><pic:cNvPicPr/></pic:nvPicPr><pic:blipFill><a:blip r:embed="rId'+n+'"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill><pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext '+size+'/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>';
   }
-  function progress(s,label='Avanço'){if(s.progress==null||s.progress===''||!Number.isFinite(Number(s.progress)))return '';const v=Math.max(0,Math.min(100,Number(s.progress)));const colors=['FF6955','FF8A51','FFAC4D','FFD84A','F3E737','E5F024','CEFF00'];const blocks=Array.from({length:20},(_,i)=>'<w:r><w:rPr><w:color w:val="'+(i<v/5?colors[Math.min(6,Math.floor(i*7/20))]:'51488A')+'"/><w:sz w:val="14"/></w:rPr><w:t>■</w:t></w:r>').join('');return '<w:p><w:pPr><w:shd w:fill="190A60"/><w:spacing w:after="0"/></w:pPr><w:r><w:rPr><w:color w:val="FFFFFF"/><w:sz w:val="14"/></w:rPr><w:t xml:space="preserve">'+label+' '+v+'%  </w:t></w:r>'+blocks+'</w:p>';}
+  function progress(s,label='Avanço'){if(s.progress==null||s.progress===''||!Number.isFinite(Number(s.progress)))return '';const v=Math.max(0,Math.min(100,Number(s.progress)));const colors=['FF6955','FF8A51','FFAC4D','FFD84A','F3E737','E5F024','CEFF00'];const blocks=Array.from({length:20},(_,i)=>'<w:r><w:rPr><w:color w:val="'+(i<v/5?colors[Math.min(6,Math.floor(i*7/20))]:'51488A')+'"/><w:sz w:val="14"/></w:rPr><w:t>■</w:t></w:r>').join('');return '<w:p><w:pPr><w:shd w:val="clear" w:color="auto" w:fill="190A60"/><w:spacing w:after="0"/></w:pPr><w:r><w:rPr><w:color w:val="FFFFFF"/><w:sz w:val="14"/></w:rPr><w:t xml:space="preserve">'+label+' '+v+'%  </w:t></w:r>'+blocks+'</w:p>';}
   const slot=(s,maxH)=>cell(p('Dia '+dateFormat(s.date),{shade:'190A60',color:'CEFF00',bold:true})+p('Empresa: '+(s.company||''),{shade:'190A60',color:'FFFFFF',size:16})+p('Local: '+(s.place||''),{shade:'190A60',color:'CEFF00',bold:true,size:16})+(s.activity?p('Atividade: '+s.activity,{shade:'190A60',color:'FFFFFF',size:15}):'')+progress(s)+photo(s,maxH)+p(s.description,{shade:'CEFF00',bold:true,size:16})+progress({progress:s.serviceProgress},'Serviço'),5000);
   const summary=()=>{const data=projectProgress(report);return data.length?p('AVANÇO FÍSICO DOS PROJETOS',{bold:true,size:16})+data.map(item=>progress({progress:item.value},item.name)).join(''):'';};
-  const body=report.pages.map((slots,i)=>{const d=report.details;return (i?'<w:p><w:r><w:br w:type="page"/></w:r></w:p>':'')+table([cell(p('BRAVA energia',{bold:true,size:34}),2600)+cell(p('REGISTRO DE EVIDÊNCIA',{bold:true,center:true,size:22}),4800)+cell(p('FORM-CORP-SMS-030 | GS2 – USO INTERNO | Rev.: 00',{size:14}),2600)],[2600,4800,2600])+(i===0?p('FORMULÁRIO',{bold:true,center:true})+table([cell(p('Gerência: '+d.department)+p('Código de Referência: '+d.reference)+p('Responsável: '+d.owner),5000)+cell(p('Origem: '+d.origin)+p('Tipo da ação: '+d.type)+p('Data: '+dateFormat(d.reportDate)),5000)],[5000,5000])+p('Tipo de Evidência: '+d.evidence+' | '+d.summary+' | Período: '+period,{size:16})+summary():'')+table([slot(slots[0],i===0?Math.max(900000,2300000-projectProgress(report).length*130000):3000000)+slot(slots[1],i===0?Math.max(900000,2300000-projectProgress(report).length*130000):3000000),slot(slots[2],i===0?Math.max(900000,2300000-projectProgress(report).length*130000):3000000)+slot(slots[3],i===0?Math.max(900000,2300000-projectProgress(report).length*130000):3000000)],[5000,5000])+p('BRAVA ENERGIA | Pág. '+(i+1)+' de '+report.pages.length,{bold:true,center:true,size:16})+p('DOCUMENTOS IMPRESSOS SÃO CONSIDERADOS CÓPIAS NÃO CONTROLADAS',{center:true,size:12});}).join('');
+  function crop(sheet,y,h){const c=document.createElement('canvas');c.width=sheet.width;c.height=h;c.getContext('2d').drawImage(sheet,0,y,sheet.width,h,0,0,c.width,h);return photo({image:{url:c.toDataURL('image/jpeg',.98),width:c.width,height:c.height}},9000000,6350000);}
+  const breakPage='<w:p><w:pPr><w:spacing w:before="0" w:after="0"/></w:pPr><w:r><w:br w:type="page"/></w:r></w:p>';
+  const body=photo({image:{url:sheets[0].toDataURL('image/jpeg',.98),width:sheets[0].width,height:sheets[0].height}},9500000,6350000)+report.pages.map((slots,i)=>breakPage+crop(sheets[i+1],0,190)+table([slot(slots[0],2700000)+slot(slots[1],2700000),slot(slots[2],2700000)+slot(slots[3],2700000)],[5000,5000])+crop(sheets[i+1],1630,124)).join('');
   files['word/document.xml']='<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"><w:body>'+body+'<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="600" w:right="900" w:bottom="600" w:left="900" w:header="0" w:footer="0" w:gutter="0"/></w:sectPr></w:body></w:document>';
   files['word/_rels/document.xml.rels']=relationships(links.join(''));
   files['_rels/.rels']=relationships(relationship('rId1','officeDocument','word/document.xml'));

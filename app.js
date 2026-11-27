@@ -1,6 +1,6 @@
 function projectProgress(report){const m=new Map();for(const s of report.pages.flat()){const name=s.activity?.trim();if(!name||s.progress==null||s.progress===''||!Number.isFinite(Number(s.progress)))continue;const k=name.toLocaleLowerCase('pt-BR');if(!m.has(k)||(s.date||'')>=m.get(k).date)m.set(k,{name,value:Number(s.progress),date:s.date||''});}return [...m.values()];}
-import { openCamera } from './camera.js?v=21';
-import { renderSheets, makePDF, makeWord } from './exports.js?v=21';
+import { openCamera } from './camera.js?v=22';
+import { renderSheets, makePDF, makeWord } from './exports.js?v=22';
 const $ = id => document.getElementById(id);
 const create = (tag, text) => {
   const element = document.createElement(tag);
@@ -500,7 +500,7 @@ function formBlock(report) {
   refresh();const group=create('div');group.append(wrap,chart);return group;
 }
 function liveCell(slot,index,pageIndex,report) {
-  const label = 'Foto '+(index+1)+' · Página '+(pageIndex+1);
+  const label = 'Foto '+(index+1)+' · Página '+(pageIndex+2);
   const cell = create('div');
   cell.className = 'lp-cell';
   const meta = create('button');
@@ -566,10 +566,10 @@ function livePage(page,pageIndex,report) {
   const sheetEl = create('article');
   sheetEl.className = 'live-page';
   sheetEl.append(pageHeader());
-  if (pageIndex === 0) sheetEl.append(formBlock(report));
+  if (pageIndex === -1) sheetEl.append(formBlock(report));
   const frame = create('div');
   frame.className = 'lp-frame';
-  for (const row of [0,1]) {
+  for (const row of (pageIndex===-1?[]:[0,1])) {
     const line = create('div');
     line.className = 'lp-row';
     line.append(liveCell(page[row*2],row*2,pageIndex,report),liveCell(page[row*2+1],row*2+1,pageIndex,report));
@@ -577,10 +577,10 @@ function livePage(page,pageIndex,report) {
   }
   const foot = create('div');
   foot.className = 'lp-foot';
-  foot.append(create('b','BRAVA ENERGIA'),create('b','Pág. '+(pageIndex+1)+' de '+report.pages.length));
+  foot.append(create('b','BRAVA ENERGIA'),create('b','Pág. '+(pageIndex+2)+' de '+(report.pages.length+1)));
   const note = create('div','DOCUMENTOS IMPRESSOS SÃO CONSIDERADOS CÓPIAS NÃO CONTROLADAS');
   note.className = 'lp-note';
-  sheetEl.append(frame,foot,note);
+  if(pageIndex!==-1)sheetEl.append(frame);sheetEl.append(foot,note);
   return sheetEl;
 }
 function renderEditor() {
@@ -597,7 +597,7 @@ function renderEditor() {
     persist(report);
     formUpdater();
   })));
-  $('pages').replaceChildren(...report.pages.map((page,index) => livePage(page,index,report)));
+  $('pages').replaceChildren(livePage(null,-1,report),...report.pages.map((page,index) => livePage(page,index,report)));
 }
 $('date').onchange = () => { if (eligible && $('date').value) openWeek($('date').value); };
 $('weeks').onchange = () => { if (eligible) openWeek($('weeks').value); };
@@ -620,7 +620,7 @@ $('view').onclick = async () => {
     }
     const name = 'Relatorio-Semanal-'+report.start;
     sheets = await renderSheets(report, fields, period(report.start), fmt);
-    [pdfFile,wordFile] = await Promise.all([makePDF(sheets,name),Promise.resolve(makeWord(report,name,period(report.start),fmt))]);
+    pdfFile = await makePDF(sheets,name);wordFile=null;try{wordFile=makeWord(report,name,period(report.start),fmt,sheets)}catch(error){$('exportStatus').textContent='Word indisponível: '+error.message;}
     $('report').replaceChildren(...sheets.map((sheet,index) => {
       const page = create('article');
       page.className = 'sheet';
@@ -630,7 +630,8 @@ $('view').onclick = async () => {
       page.append(img);
       return page;
     }));
-    $('exportStatus').textContent = '';
+    if(wordFile)$('exportStatus').textContent = '';
+    $('word').disabled=$('shareWord').disabled=!wordFile;
     $('editor').hidden = true;
     $('preview').hidden = false;
     scrollTo(0,0);
@@ -641,7 +642,7 @@ $('view').onclick = async () => {
   }
 };
 $('back').onclick = () => { $('preview').hidden = true; $('editor').hidden = false; };
-$('print').onclick = () => window.print();
+$('print').onclick = () => {if(!pdfFile)return;const url=URL.createObjectURL(pdfFile);const a=create('a');a.href=url;a.target='_blank';a.rel='noopener';document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),120000);$('exportStatus').textContent='PDF aberto para impressão. No iPhone, use Compartilhar > Imprimir.';};
 function download(file) {
   const link = create('a');
   link.href = URL.createObjectURL(file);
