@@ -68,7 +68,8 @@ export async function renderSheets(report, fields, period, dateFormat) {
     }
 
     // Cabeçalho de página
-    text('RL',L-5,118,62,{bold:true,italic:true,color:navy});
+    text('BRAVA',L-5,118,62,{bold:true,italic:true,color:navy});
+    text('energia',L+150,140,17,{color:'#6B6F86'});
     text('REGISTRO DE EVIDÊNCIA',555,98,23,{bold:true,align:'center'});
     ctx.fillStyle=navy; ctx.fillRect(885,30,2,140);
     text('FORM-CORP-SMS-030',1025,70,18,{bold:true,align:'center'});
@@ -167,7 +168,7 @@ export async function renderSheets(report, fields, period, dateFormat) {
 
     // Rodapé
     ctx.fillStyle=navy; ctx.fillRect(150,1648,940,2);
-    text('RELATÓRIO SEMANAL',150,1682,18,{bold:true,color:navy});
+    text('BRAVA ENERGIA',150,1682,18,{bold:true,color:navy});
     text('Pág. '+(pageIndex+1)+' de '+total,1090,1682,18,{bold:true,color:navy,align:'right'});
     spaced('DOCUMENTOS IMPRESSOS SÃO CONSIDERADOS CÓPIAS NÃO CONTROLADAS',W/2,1730,14,'#8C8C99',3);
     return canvas;
