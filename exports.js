@@ -27,6 +27,10 @@ function lines(ctx, text, width) {
   return result;
 }
 function wrap(ctx, text, x, y, width, lineHeight, maximum) {
+  if (ctx.recordWordText) {
+    ctx.recordWordText(String(text ?? ''),x,y,width,lineHeight,maximum);
+    return;
+  }
   const all = lines(ctx,text,width);
   for (let index=0; index<Math.min(all.length,maximum); index++) {
     const ellipsis = index === maximum-1 && all.length > maximum ? '…' : '';
@@ -49,7 +53,21 @@ export async function renderSheets(report, fields, period, dateFormat, separateP
     const canvas = document.createElement('canvas');
     canvas.width=W; canvas.height=H;
     const ctx=canvas.getContext('2d');
-    const photos=[];
+    const photos=[], wordText=[];
+    if (separatePhotos) {
+      ctx.recordWordText = (value,x,y,max,lineHeight,lineCount=1) => {
+        value=String(value ?? '');
+        const metrics=ctx.measureText(value);
+        const size=Number(/([\d.]+)px/.exec(ctx.font)?.[1]||18);
+        const align=ctx.textAlign;
+        const width=Math.max(12,max??metrics.width+size*.65);
+        const left=align==='center'?x-width/2:align==='right'?x-width:x;
+        wordText.push({value,x:left,y:y-(metrics.fontBoundingBoxAscent||size*.9),width,
+          height:lineHeight?lineHeight*lineCount:size*1.3,lineHeight:lineHeight||size*1.2,
+          align,size,color:ctx.fillStyle,bold:ctx.font.includes('bold'),italic:ctx.font.includes('italic')});
+      };
+      ctx.fillText=ctx.recordWordText;
+    }
     ctx.fillStyle='#fff'; ctx.fillRect(0,0,W,H);
     ctx.textBaseline='alphabetic';
     const font = (size,bold=false,italic=false) => { ctx.font=(italic?'italic ':'')+(bold?'bold ':'')+size+'px Arial, Helvetica, sans-serif'; };
@@ -66,7 +84,11 @@ export async function renderSheets(report, fields, period, dateFormat, separateP
       font(size); ctx.fillStyle=color;
       const widths=[...content].map(c => ctx.measureText(c).width+gap);
       let x=cx-widths.reduce((a,b) => a+b,0)/2;
-      [...content].forEach((c,i) => { ctx.fillText(c,x,y); x+=widths[i]; });
+      if (ctx.recordWordText) {
+        ctx.recordWordText(content,cx-widths.reduce((a,b)=>a+b,0)/2,y,widths.reduce((a,b)=>a+b,0));
+      } else {
+        [...content].forEach((c,i) => { ctx.fillText(c,x,y); x+=widths[i]; });
+      }
     }
 
     // Cabeçalho de página
@@ -200,7 +222,7 @@ export async function renderSheets(report, fields, period, dateFormat, separateP
     text('BRAVA ENERGIA',150,1682,18,{bold:true,color:navy});
     text('Pág. '+(pageIndex+1)+' de '+total,1090,1682,18,{bold:true,color:navy,align:'right'});
     spaced('DOCUMENTOS IMPRESSOS SÃO CONSIDERADOS CÓPIAS NÃO CONTROLADAS',W/2,1730,14,'#8C8C99',3);
-    return separatePhotos ? {canvas,photos} : canvas;
+    return separatePhotos ? {canvas,photos,wordText} : canvas;
   }));
 }
 
@@ -240,8 +262,7 @@ function wordPage(sheet,index,width=7450000) {
 }
 function wordDrawing(id,width,height,name,position) {
   const size='cx="'+width+'" cy="'+height+'"';
-  const frame=position
-    ? '<wp:anchor distT="0" distB="0" distL="0" distR="0" simplePos="0" relativeHeight="'+id+'" behindDoc="0" locked="0" layoutInCell="0" allowOverlap="1"><wp:simplePos x="0" y="0"/><wp:positionH relativeFrom="page"><wp:posOffset>'+position.x+'</wp:posOffset></wp:positionH><wp:positionV relativeFrom="page"><wp:posOffset>'+position.y+'</wp:posOffset></wp:positionV><wp:extent '+size+'/><wp:effectExtent l="0" t="0" r="0" b="0"/><wp:wrapNone/>'
+  const frame=position ? wordAnchor(id,width,height,position)
     : '<wp:inline distT="0" distB="0" distL="0" distR="0"><wp:extent '+size+'/>';
   return '<w:r><w:drawing>'+frame+
     '<wp:docPr id="'+id+'" name="'+name+'"/><wp:cNvGraphicFramePr/><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">'+
@@ -249,6 +270,28 @@ function wordDrawing(id,width,height,name,position) {
     '<pic:blipFill><a:blip r:embed="rId'+id+'"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>'+
     '<pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext '+size+'/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom>'+
     '</pic:spPr></pic:pic></a:graphicData></a:graphic>'+(position?'</wp:anchor>':'</wp:inline>')+'</w:drawing></w:r>';
+}
+function wordAnchor(id,width,height,position) {
+  const size='cx="'+width+'" cy="'+height+'"';
+  return '<wp:anchor distT="0" distB="0" distL="0" distR="0" simplePos="0" relativeHeight="'+id+'" behindDoc="0" locked="0" layoutInCell="0" allowOverlap="1"><wp:simplePos x="0" y="0"/><wp:positionH relativeFrom="page"><wp:posOffset>'+position.x+'</wp:posOffset></wp:positionH><wp:positionV relativeFrom="page"><wp:posOffset>'+position.y+'</wp:posOffset></wp:positionV><wp:extent '+size+'/><wp:effectExtent l="0" t="0" r="0" b="0"/><wp:wrapNone/>';
+}
+function xmlText(value) {
+  return value.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g,'')
+    .replace(/[&<>]/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[char]));
+}
+function wordTextBox(id,text,scale,position) {
+  const width=Math.round(Math.max(text.width,12)*scale);
+  const height=Math.round(text.height*scale);
+  const size=Math.max(1,Math.round(text.size*scale/6350));
+  const align=['center','right'].includes(text.align)?text.align:'left';
+  const color=typeof text.color==='string' && /^#[a-f0-9]{6}$/i.test(text.color)?text.color.slice(1):'000000';
+  const content=text.value.split('\n').map(line=>'<w:t xml:space="preserve">'+xmlText(line)+'</w:t>').join('<w:br/>');
+  return '<w:r><w:drawing>'+wordAnchor(id,width,height,position)+'<wp:docPr id="'+id+'" name="Texto '+id+'"/><wp:cNvGraphicFramePr/>'+
+    '<a:graphic><a:graphicData uri="http://schemas.microsoft.com/office/word/2010/wordprocessingShape"><wps:wsp><wps:cNvSpPr txBox="1"/>'+
+    '<wps:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="'+width+'" cy="'+height+'"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:noFill/><a:ln><a:noFill/></a:ln></wps:spPr>'+
+    '<wps:txbx><w:txbxContent><w:p><w:pPr><w:spacing w:before="0" w:after="0" w:line="'+Math.round(text.lineHeight*scale/635)+'" w:lineRule="exact"/><w:jc w:val="'+align+'"/></w:pPr>'+
+    '<w:r><w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial"/>'+(text.bold?'<w:b/>':'')+(text.italic?'<w:i/>':'')+'<w:color w:val="'+color+'"/><w:sz w:val="'+size+'"/></w:rPr>'+content+
+    '</w:r></w:p></w:txbxContent></wps:txbx><wps:bodyPr wrap="square" lIns="0" tIns="0" rIns="0" bIns="0" anchor="t"><a:noAutofit/></wps:bodyPr></wps:wsp></a:graphicData></a:graphic></wp:anchor></w:drawing></w:r>';
 }
 export function makeWord(sheets,pageImages,name) {
   const files = {}, links=[];
@@ -261,14 +304,14 @@ export function makeWord(sheets,pageImages,name) {
   return packageWord(files,links,body,name,'0');
 }
 
-export function makeEditableWord(formSheet,formImage,photoPages,name) {
-  const files={'word/media/formulario.png':jpeg(formImage)};
-  const links=[relationship('rId1','image','media/formulario.png')];
+export function makeEditableWord(pages,name) {
+  const files={}, links=[];
+  let drawingId=0;
   const pageWidth=11906*635;
   const pageHeight=16838*635;
   const artworkWidth=7450000;
   function drawing(url,label,width,height,position) {
-    const id=links.length+1;
+    const id=++drawingId;
     const extension=url.startsWith('data:image/png')?'png':'jpg';
     const filename=label+'-'+id+'.'+extension;
     const path='media/'+filename;
@@ -276,7 +319,7 @@ export function makeEditableWord(formSheet,formImage,photoPages,name) {
     links.push(relationship('rId'+id,'image',path));
     return wordDrawing(id,Math.round(width),Math.round(height),filename,position);
   }
-  const body=wordPage(formSheet,0,artworkWidth)+photoPages.map(({canvas,photos})=>{
+  const body=pages.map(({canvas,photos,wordText},index)=>{
     const scale=artworkWidth/canvas.width;
     const artworkHeight=canvas.height*scale;
     const x=Math.round((pageWidth-artworkWidth)/2);
@@ -285,13 +328,16 @@ export function makeEditableWord(formSheet,formImage,photoPages,name) {
     const pictures=photos.map(photo=>drawing(photo.url,'foto',photo.width*scale,photo.height*scale,{
       x:Math.round(x+photo.x*scale),y:Math.round(y+photo.y*scale)
     })).join('');
-    return '<w:p><w:pPr><w:pageBreakBefore/><w:spacing w:before="0" w:after="0"/></w:pPr>'+background+pictures+'</w:p>';
+    const textBoxes=wordText.map(text=>wordTextBox(++drawingId,text,scale,{
+      x:Math.round(x+text.x*scale),y:Math.round(y+text.y*scale)
+    })).join('');
+    return '<w:p><w:pPr>'+(index?'<w:pageBreakBefore/>':'')+'<w:spacing w:before="0" w:after="0"/></w:pPr>'+background+pictures+textBoxes+'</w:p>';
   }).join('');
   return packageWord(files,links,body,name,'0');
 }
 
 function packageWord(files,links,body,name,margin) {
-  files['word/document.xml']='<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"><w:body>'+body+'<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="'+margin+'" w:right="'+margin+'" w:bottom="'+margin+'" w:left="'+margin+'" w:header="0" w:footer="0" w:gutter="0"/></w:sectPr></w:body></w:document>';
+  files['word/document.xml']='<w:document xmlns:wps="http://schemas.microsoft.com/office/word/2010/wordprocessingShape" xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"><w:body>'+body+'<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="'+margin+'" w:right="'+margin+'" w:bottom="'+margin+'" w:left="'+margin+'" w:header="0" w:footer="0" w:gutter="0"/></w:sectPr></w:body></w:document>';
   files['word/_rels/document.xml.rels']=relationships(links.join(''));
   files['_rels/.rels']=relationships(relationship('rId1','officeDocument','word/document.xml'));
   files['[Content_Types].xml']='<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Default Extension="png" ContentType="image/png"/><Default Extension="jpg" ContentType="image/jpeg"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>';
