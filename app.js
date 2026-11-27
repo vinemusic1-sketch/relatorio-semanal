@@ -1,6 +1,6 @@
 function projectProgress(report){const m=new Map();for(const s of report.pages.flat()){const name=s.activity?.trim();if(!name)continue;const k=name.normalize('NFD').replace(/\p{M}/gu,'').toLocaleLowerCase('pt-BR').replace(/\s+/g,' ');const item=m.get(k)||{name,value:null,date:'',updated:0,count:0};if(s.image)item.count++;const valid=s.progress!=null&&String(s.progress).trim()!==''&&Number.isFinite(Number(s.progress));const updated=s.progressUpdated||0;if(valid&& (item.value===null||updated>item.updated||updated===item.updated&&(s.date||'')>=item.date)){item.value=Math.max(0,Math.min(100,Number(s.progress)));item.date=s.date||'';item.updated=updated;}m.set(k,item);}return [...m.values()];}
 import { openCamera } from './camera.js?v=29';
-import { renderSheets, makePDF, makeWord } from './exports.js?v=31';
+import { renderSheets, makePDF, makeWord, makeEditableWord } from './exports.js?v=32';
 const $ = id => document.getElementById(id);
 const create = (tag, text) => {
   const element = document.createElement(tag);
@@ -117,7 +117,7 @@ try {
   // Existing weekly reports remain available if browser preferences cannot be read.
 }
 
-let db, current, sheets = [], wordFile, pdfFile, eligible = false;
+let db, current, sheets = [], wordFile, fixedWordFile, pdfFile, eligible = false;
 const pending = new Set();
 const setStatus = value => { $('status').textContent = value; };
 function requestResult(request) {
@@ -637,8 +637,10 @@ $('view').onclick = async () => {
     const pageImages = sheets.map(sheet => sheet.toDataURL('image/png'));
     pdfFile = await makePDF(sheets,name);
     wordFile = null;
+    fixedWordFile = null;
     try {
-      wordFile = makeWord(sheets,pageImages,name+'-V4.8');
+      wordFile = makeEditableWord(report,fields,period(report.start),fmt,name+'-Editavel');
+      fixedWordFile = makeWord(sheets,pageImages,name+'-Layout-Fixo');
     } catch (error) {
       $('exportStatus').textContent = 'Word indisponível: '+error.message;
     }
@@ -653,6 +655,7 @@ $('view').onclick = async () => {
     }));
     if(wordFile)$('exportStatus').textContent = '';
     $('word').disabled=$('shareWord').disabled=!wordFile;
+    $('wordFixed').disabled=!fixedWordFile;
     $('editor').hidden = true;
     $('preview').hidden = false;
     scrollTo(0,0);
@@ -683,6 +686,7 @@ async function share(file) {
 $('word').onclick = () => download(wordFile);
 $('pdf').onclick = () => download(pdfFile);
 $('shareWord').onclick = () => share(wordFile);
+$('wordFixed').onclick = () => share(fixedWordFile);
 $('sharePdf').onclick = () => share(pdfFile);
 try {
   const req = indexedDB.open('rl-registro-semanal',1);

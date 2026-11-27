@@ -232,15 +232,18 @@ function wordPage(sheet,index) {
   const id=index+1;
   const width=7450000;
   const height=Math.round(width*sheet.height/sheet.width);
-  const size='cx="'+width+'" cy="'+height+'"';
   return '<w:p><w:pPr>'+(index ? '<w:pageBreakBefore/>' : '')+
     '<w:spacing w:before="0" w:after="0" w:line="240" w:lineRule="auto"/><w:jc w:val="center"/></w:pPr>'+
-    '<w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0"><wp:extent '+size+'/>'+
-    '<wp:docPr id="'+id+'" name="Página '+id+'"/><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">'+
-    '<pic:pic><pic:nvPicPr><pic:cNvPr id="'+id+'" name="Página '+id+'"/><pic:cNvPicPr/></pic:nvPicPr>'+
+    wordDrawing(id,width,height)+'</w:p>';
+}
+function wordDrawing(id,width,height) {
+  const size='cx="'+width+'" cy="'+height+'"';
+  return '<w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0"><wp:extent '+size+'/>'+
+    '<wp:docPr id="'+id+'" name="Imagem '+id+'"/><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">'+
+    '<pic:pic><pic:nvPicPr><pic:cNvPr id="'+id+'" name="Imagem '+id+'"/><pic:cNvPicPr/></pic:nvPicPr>'+
     '<pic:blipFill><a:blip r:embed="rId'+id+'"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>'+
     '<pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext '+size+'/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom>'+
-    '</pic:spPr></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>';
+    '</pic:spPr></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r>';
 }
 export function makeWord(sheets,pageImages,name) {
   const files = {}, links=[];
@@ -250,10 +253,74 @@ export function makeWord(sheets,pageImages,name) {
     links.push(relationship('rId'+(index+1),'image',path));
     return wordPage(sheet,index);
   }).join('');
-  files['word/document.xml']='<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"><w:body>'+body+'<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="0" w:right="0" w:bottom="0" w:left="0" w:header="0" w:footer="0" w:gutter="0"/></w:sectPr></w:body></w:document>';
+  return packageWord(files,links,body,name,'0');
+}
+
+export function makeEditableWord(report,fields,period,dateFormat,name) {
+  const files={}, links=[];
+  const escape = value => String(value ?? '').replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g,'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&apos;'}[char]));
+  function paragraph(value,{bold=false,color='190A60',size=20,page=false}={}) {
+    const content=String(value ?? '').split('\n').map(line=>'<w:t xml:space="preserve">'+escape(line)+'</w:t>').join('<w:br/>');
+    return '<w:p><w:pPr>'+(page?'<w:pageBreakBefore/>':'')+'<w:spacing w:after="65"/></w:pPr><w:r><w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial"/>'+(bold?'<w:b/>':'')+'<w:color w:val="'+color+'"/><w:sz w:val="'+size+'"/></w:rPr>'+content+'</w:r></w:p>';
+  }
+  function cell(content,fill='FFFFFF') {
+    return '<w:tc><w:tcPr><w:tcW w:type="dxa" w:w="5000"/><w:shd w:val="clear" w:color="auto" w:fill="'+fill+'"/></w:tcPr>'+content+'</w:tc>';
+  }
+  function table(rows) {
+    const borders=['top','left','bottom','right','insideH','insideV'].map(side=>'<w:'+side+' w:val="single" w:sz="6" w:color="190A60"/>').join('');
+    return '<w:tbl><w:tblPr><w:tblW w:type="dxa" w:w="10000"/><w:tblBorders>'+borders+'</w:tblBorders><w:tblLayout w:type="fixed"/></w:tblPr><w:tblGrid><w:gridCol w:w="5000"/><w:gridCol w:w="5000"/></w:tblGrid>'+rows.map(row=>'<w:tr><w:trPr><w:cantSplit/></w:trPr>'+row+'</w:tr>').join('')+'</w:tbl>';
+  }
+  function photo(image) {
+    if (!image?.url) return paragraph(' ');
+    const id=links.length+1;
+    const png=image.url.startsWith('data:image/png');
+    const path='media/foto-'+id+(png?'.png':'.jpg');
+    files['word/'+path]=jpeg(image.url);
+    links.push(relationship('rId'+id,'image',path));
+    const width=image.width||1400, height=image.height||1050;
+    const scale=Math.min(2880000/width,1900000/height);
+    return '<w:p><w:pPr><w:jc w:val="center"/></w:pPr>'+wordDrawing(id,Math.round(width*scale),Math.round(height*scale))+'</w:p>';
+  }
+  const progress = (label,value) => value == null || value === '' ? '' : label+': '+value+'%';
+  function evidencePair(left,right) {
+    const metadata = slot => paragraph('Dia '+dateFormat(slot.date),{bold:true,color:'CEFF00'})+
+      paragraph('Empresa: '+(slot.company??''),{color:'FFFFFF',size:17})+
+      paragraph('Local: '+(slot.place??''),{bold:true,color:'CEFF00'})+
+      (slot.activity?paragraph('Atividade: '+slot.activity,{color:'FFFFFF',size:17}):'')+
+      (progress('Avanço',slot.progress)?paragraph(progress('Avanço',slot.progress),{color:'FFFFFF',size:17}):'');
+    const description = slot => paragraph(slot.description)+
+      (progress('Serviço',slot.serviceProgress)?paragraph(progress('Serviço',slot.serviceProgress),{size:17}):'');
+    return [cell(metadata(left),'190A60')+cell(metadata(right),'190A60'),
+      cell(photo(left.image))+cell(photo(right.image)),
+      cell(description(left),'CEFF00')+cell(description(right),'CEFF00')];
+  }
+  const heading = page => paragraph('BRAVA Energia',{bold:true,size:36,page})+
+    paragraph('REGISTRO DE EVIDÊNCIA',{bold:true,size:25})+paragraph('FORM-CORP-SMS-030 · GS2 – USO INTERNO · Rev.: 00',{size:16});
+  const footer = number => paragraph('BRAVA ENERGIA  ·  Pág. '+number+' de '+(report.pages.length+1),{bold:true,size:16})+
+    paragraph('DOCUMENTOS IMPRESSOS SÃO CONSIDERADOS CÓPIAS NÃO CONTROLADAS',{size:15});
+  const fieldsRows=[];
+  for (let i=0;i<fields.length;i+=2) {
+    fieldsRows.push([fields[i],fields[i+1]].map(field=>{
+      if (!field) return cell(paragraph(''));
+      const [key,label]=field;
+      const value=report.details[key];
+      return cell(paragraph(label+': '+(key==='reportDate'?dateFormat(value):key==='evidence'?evidenceText(value):value??'')));
+    }).join(''));
+  }
+  const projects=projectProgress(report);
+  const summary=projects.map(item=>paragraph(item.name+' · '+(item.value===null?'Não informado':item.value+'%')+' · '+item.count+' registros fotográficos')).join('');
+  const body=heading(false)+paragraph('FORMULÁRIO',{bold:true})+table(fieldsRows)+paragraph('Período: '+period)+
+    paragraph('AVANÇO FÍSICO DOS PROJETOS',{bold:true})+summary+
+    paragraph(projects.length+' atividades · '+report.pages.flat().filter(slot=>slot.image).length+' fotografias · '+projects.filter(item=>item.value===100).length+' concluídas')+footer(1)+
+    report.pages.map((slots,index)=>heading(true)+table([...evidencePair(slots[0],slots[1]),...evidencePair(slots[2],slots[3])])+footer(index+2)).join('');
+  return packageWord(files,links,body,name,'700');
+}
+
+function packageWord(files,links,body,name,margin) {
+  files['word/document.xml']='<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"><w:body>'+body+'<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="'+margin+'" w:right="'+margin+'" w:bottom="'+margin+'" w:left="'+margin+'" w:header="0" w:footer="0" w:gutter="0"/></w:sectPr></w:body></w:document>';
   files['word/_rels/document.xml.rels']=relationships(links.join(''));
   files['_rels/.rels']=relationships(relationship('rId1','officeDocument','word/document.xml'));
-  files['[Content_Types].xml']='<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Default Extension="png" ContentType="image/png"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>';
+  files['[Content_Types].xml']='<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Default Extension="png" ContentType="image/png"/><Default Extension="jpg" ContentType="image/jpeg"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>';
   return new File(zip(files),name+'.docx',{type:wordMime});
 }
 function zip(files) {
