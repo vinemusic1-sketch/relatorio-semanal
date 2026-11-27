@@ -1,6 +1,6 @@
 function projectProgress(report){const m=new Map();for(const s of report.pages.flat()){const name=s.activity?.trim();if(!name)continue;const k=name.normalize('NFD').replace(/\p{M}/gu,'').toLocaleLowerCase('pt-BR').replace(/\s+/g,' ');const item=m.get(k)||{name,value:null,date:'',updated:0,count:0};if(s.image)item.count++;const valid=s.progress!=null&&String(s.progress).trim()!==''&&Number.isFinite(Number(s.progress));const updated=s.progressUpdated||0;if(valid&& (item.value===null||updated>item.updated||updated===item.updated&&(s.date||'')>=item.date)){item.value=Math.max(0,Math.min(100,Number(s.progress)));item.date=s.date||'';item.updated=updated;}m.set(k,item);}return [...m.values()];}
 import { openCamera } from './camera.js?v=29';
-import { renderSheets, makePDF, makeWord } from './exports.js?v=29';
+import { renderSheets, makePDF, makeWord } from './exports.js?v=30';
 const $ = id => document.getElementById(id);
 const create = (tag, text) => {
   const element = document.createElement(tag);
@@ -634,13 +634,20 @@ $('view').onclick = async () => {
     }
     const name = 'Relatorio-Semanal-'+report.start;
     sheets = await renderSheets(report, fields, period(report.start), fmt);
-    pdfFile = await makePDF(sheets,name);wordFile=null;try{wordFile=makeWord(report,name,period(report.start),fmt,sheets)}catch(error){$('exportStatus').textContent='Word indisponível: '+error.message;}
-    $('report').replaceChildren(...sheets.map((sheet,index) => {
+    const pageImages = sheets.map(sheet => sheet.toDataURL('image/png'));
+    pdfFile = await makePDF(sheets,name);
+    wordFile = null;
+    try {
+      wordFile = makeWord(sheets,pageImages,name+'-V4.8');
+    } catch (error) {
+      $('exportStatus').textContent = 'Word indisponível: '+error.message;
+    }
+    $('report').replaceChildren(...pageImages.map((image,index) => {
       const page = create('article');
       page.className = 'sheet';
       const img = create('img');
       img.alt = 'Página '+(index+1)+' do registro semanal';
-      img.src = sheet.toDataURL('image/jpeg',.92);
+      img.src = image;
       page.append(img);
       return page;
     }));
