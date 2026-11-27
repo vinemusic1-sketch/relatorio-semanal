@@ -128,7 +128,7 @@ export async function renderSheets(report, fields, period, dateFormat) {
       const hasProgress=s=>s.progress!==undefined && s.progress!==null && s.progress!=='' && Number.isFinite(Number(s.progress));
       const hasActivity=pair.some(s=>s.activity?.trim());
       const showProgress=pair.some(hasProgress);
-      const metaH=50, band=40+(hasActivity?26:0)+(showProgress?26:0), desc=76;
+      const metaH=50, band=40+(hasActivity?18:0)+(showProgress?16:0), desc=76;
       const ty=y0+metaH+8;
       const ph=Math.min(blockH-metaH-8-band-desc-28,450);
       for (const [index,slot] of pair.entries()) {
@@ -159,12 +159,12 @@ export async function renderSheets(report, fields, period, dateFormat) {
         ctx.fillStyle=navyBlue; ctx.fillRect(x,ty+band+ph-1,w,2);
         const wl=text('Local: ',x+14,ty+28,21,{bold:true,color:neonGreen});
         text(slot.place ?? '',x+14+wl,ty+28,21,{bold:true,color:neonGreen,max:w-28-wl});
-        if(slot.activity?.trim()) text('Atividade: '+slot.activity,x+14,ty+50,17,{bold:true,color:'#ffffff',max:w-28});
+        if(slot.activity?.trim()) text('Atividade: '+slot.activity,x+14,ty+47,14,{bold:true,color:'#ffffff',max:w-28});
         if(hasProgress(slot)){
           const p=Math.max(0,Math.min(100,Number(slot.progress)));
-          const py=ty+40+(hasActivity?26:0);
-          text('Avanço '+p+'%',x+14,py+18,16,{bold:true,color:'#ffffff'});
-          const bx=x+135,bw=w-149,bh=12,by=py+6;
+          const py=ty+40+(hasActivity?18:0);
+          text('Avanço '+p+'%',x+14,py+12,13,{bold:true,color:'#ffffff'});
+          const bx=x+135,bw=w-149,bh=7,by=py+4;
           ctx.fillStyle='#51488a';ctx.fillRect(bx,by,bw,bh);
           if(p>0){const g=ctx.createLinearGradient(bx,by,bx+bw,by);g.addColorStop(0,'#ff6955');g.addColorStop(.45,'#ffd84a');g.addColorStop(1,'#ceff00');ctx.fillStyle=g;ctx.fillRect(bx,by,bw*p/100,bh);}
         }
@@ -228,15 +228,22 @@ function wordPage(sheet,index) {
     '<pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext '+size+'/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom>'+
     '</pic:spPr></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>';
 }
-export function makeWord(sheets,name) {
-  const files = {}, links=[];
-  const body=sheets.map((sheet,index)=>{
-    const path='media/pagina-'+(index+1)+'.jpg';
-    files['word/'+path]=jpeg(sheet.toDataURL('image/jpeg',.94));
-    links.push(relationship('rId'+(index+1),'image',path));
-    return wordPage(sheet,index);
-  }).join('');
-  files['word/document.xml']='<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"><w:body>'+body+'<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="0" w:right="0" w:bottom="0" w:left="0" w:header="0" w:footer="0" w:gutter="0"/></w:sectPr></w:body></w:document>';
+export function makeWord(report,name,period,dateFormat) {
+  const files={},links=[]; let id=0;
+  const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&apos;'}[c]));
+  const p=(v,{color='190A60',bold=false,size=18,shade='',center=false}={})=>'<w:p><w:pPr><w:spacing w:before="0" w:after="35"/>'+(center?'<w:jc w:val="center"/>':'')+(shade?'<w:shd w:fill="'+shade+'"/>':'')+'</w:pPr><w:r><w:rPr><w:color w:val="'+color+'"/><w:sz w:val="'+size+'"/>'+(bold?'<w:b/>':'')+'</w:rPr><w:t xml:space="preserve">'+esc(v)+'</w:t></w:r></w:p>';
+  const cell=(content,width,shade='')=>'<w:tc><w:tcPr><w:tcW w:w="'+width+'" w:type="dxa"/>'+(shade?'<w:shd w:fill="'+shade+'"/>':'')+'</w:tcPr>'+content+'</w:tc>';
+  const table=(rows,widths)=>'<w:tbl><w:tblPr><w:tblW w:w="'+widths.reduce((a,b)=>a+b,0)+'" w:type="dxa"/><w:tblLayout w:type="fixed"/></w:tblPr><w:tblGrid>'+widths.map(w=>'<w:gridCol w:w="'+w+'"/>').join('')+'</w:tblGrid>'+rows.map(row=>'<w:tr><w:trPr><w:cantSplit/></w:trPr>'+row+'</w:tr>').join('')+'</w:tbl>';
+  function photo(s,maxH){
+    if(!s.image?.url)return p('');
+    const n=++id,path='media/foto-'+n+'.jpg';files['word/'+path]=jpeg(s.image.url);links.push(relationship('rId'+n,'image',path));
+    const w=s.image.width||1400,h=s.image.height||1050,scale=Math.min(3150000/w,maxH/h),size='cx="'+Math.round(w*scale)+'" cy="'+Math.round(h*scale)+'"';
+    return '<w:p><w:pPr><w:jc w:val="center"/><w:spacing w:after="0"/></w:pPr><w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0"><wp:extent '+size+'/><wp:docPr id="'+n+'" name="Foto '+n+'"/><wp:cNvGraphicFramePr><a:graphicFrameLocks noChangeAspect="1"/></wp:cNvGraphicFramePr><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic><pic:nvPicPr><pic:cNvPr id="'+n+'" name="Foto '+n+'"/><pic:cNvPicPr/></pic:nvPicPr><pic:blipFill><a:blip r:embed="rId'+n+'"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill><pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext '+size+'/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>';
+  }
+  function progress(s){if(s.progress==null||s.progress===''||!Number.isFinite(Number(s.progress)))return '';const v=Math.max(0,Math.min(100,Number(s.progress)));const colors=['FF6955','FF8A51','FFAC4D','FFD84A','F3E737','E5F024','CEFF00'];const blocks=Array.from({length:20},(_,i)=>'<w:r><w:rPr><w:color w:val="'+(i<v/5?colors[Math.min(6,Math.floor(i*7/20))]:'51488A')+'"/><w:sz w:val="14"/></w:rPr><w:t>■</w:t></w:r>').join('');return '<w:p><w:pPr><w:shd w:fill="190A60"/><w:spacing w:after="0"/></w:pPr><w:r><w:rPr><w:color w:val="FFFFFF"/><w:sz w:val="14"/></w:rPr><w:t xml:space="preserve">Avanço '+v+'%  </w:t></w:r>'+blocks+'</w:p>';}
+  const slot=(s,maxH)=>cell(p('Dia '+dateFormat(s.date),{shade:'190A60',color:'CEFF00',bold:true})+p('Empresa: '+(s.company||''),{shade:'190A60',color:'FFFFFF',size:16})+p('Local: '+(s.place||''),{shade:'190A60',color:'CEFF00',bold:true,size:16})+(s.activity?p('Atividade: '+s.activity,{shade:'190A60',color:'FFFFFF',size:15}):'')+progress(s)+photo(s,maxH)+p(s.description,{shade:'CEFF00',bold:true,size:16}),5000);
+  const body=report.pages.map((slots,i)=>{const d=report.details;return (i?'<w:p><w:r><w:br w:type="page"/></w:r></w:p>':'')+table([cell(p('BRAVA energia',{bold:true,size:34}),2600)+cell(p('REGISTRO DE EVIDÊNCIA',{bold:true,center:true,size:22}),4800)+cell(p('FORM-CORP-SMS-030 | GS2 – USO INTERNO | Rev.: 00',{size:14}),2600)],[2600,4800,2600])+(i===0?p('FORMULÁRIO',{bold:true,center:true})+table([cell(p('Gerência: '+d.department)+p('Código de Referência: '+d.reference)+p('Responsável: '+d.owner),5000)+cell(p('Origem: '+d.origin)+p('Tipo da ação: '+d.type)+p('Data: '+dateFormat(d.reportDate)),5000)],[5000,5000])+p('Tipo de Evidência: '+d.evidence+' | '+d.summary+' | Período: '+period,{size:16}):'')+table([slot(slots[0],i===0?2300000:3000000)+slot(slots[1],i===0?2300000:3000000),slot(slots[2],i===0?2300000:3000000)+slot(slots[3],i===0?2300000:3000000)],[5000,5000])+p('BRAVA ENERGIA | Pág. '+(i+1)+' de '+report.pages.length,{bold:true,center:true,size:16})+p('DOCUMENTOS IMPRESSOS SÃO CONSIDERADOS CÓPIAS NÃO CONTROLADAS',{center:true,size:12});}).join('');
+  files['word/document.xml']='<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"><w:body>'+body+'<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="600" w:right="900" w:bottom="600" w:left="900" w:header="0" w:footer="0" w:gutter="0"/></w:sectPr></w:body></w:document>';
   files['word/_rels/document.xml.rels']=relationships(links.join(''));
   files['_rels/.rels']=relationships(relationship('rId1','officeDocument','word/document.xml'));
   files['[Content_Types].xml']='<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Default Extension="jpg" ContentType="image/jpeg"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>';

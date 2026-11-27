@@ -1,5 +1,5 @@
-import { openCamera } from './camera.js?v=18';
-import { renderSheets, makePDF, makeWord } from './exports.js?v=18';
+import { openCamera } from './camera.js?v=19';
+import { renderSheets, makePDF, makeWord } from './exports.js?v=19';
 const $ = id => document.getElementById(id);
 const create = (tag, text) => {
   const element = document.createElement(tag);
@@ -194,7 +194,7 @@ async function resizePhoto(file) {
     const image = new Image();
     image.src = url;
     await image.decode();
-    const scale = Math.min(1,1400/Math.max(image.width,image.height));
+    const scale = 1;
     const canvas = create('canvas');
     canvas.width = Math.max(1,Math.round(image.width*scale));
     canvas.height = Math.max(1,Math.round(image.height*scale));
@@ -208,7 +208,7 @@ async function resizePhoto(file) {
     stamp.width = Math.max(1,Math.round(image.width*stampScale));
     stamp.height = Math.max(1,Math.round(stampHeight*stampScale));
     stamp.getContext('2d').drawImage(image,0,image.height-stampHeight,image.width,stampHeight,0,0,stamp.width,stamp.height);
-    return {url:canvas.toDataURL('image/jpeg',.85),width:canvas.width,height:canvas.height,stamp:stamp.toDataURL('image/jpeg',.93)};
+    return {url:canvas.toDataURL('image/jpeg',.95),width:canvas.width,height:canvas.height,stamp:stamp.toDataURL('image/jpeg',.93)};
   } finally {
     URL.revokeObjectURL(url);
   }
@@ -597,7 +597,7 @@ $('view').onclick = async () => {
     }
     const name = 'Relatorio-Semanal-'+report.start;
     sheets = await renderSheets(report, fields, period(report.start), fmt);
-    [pdfFile,wordFile] = await Promise.all([makePDF(sheets,name),Promise.resolve(makeWord(sheets,name))]);
+    [pdfFile,wordFile] = await Promise.all([makePDF(sheets,name),Promise.resolve(makeWord(report,name,period(report.start),fmt))]);
     $('report').replaceChildren(...sheets.map((sheet,index) => {
       const page = create('article');
       page.className = 'sheet';
