@@ -84,3 +84,27 @@ input[type=date]::-webkit-date-and-time-value{text-align:left}
 .lp-spare{display:none}
 
 .ts-camera{max-height:94dvh;overflow:auto}.ts-stage{position:relative;background:#111;line-height:0;margin:.6rem 0}.ts-stage video{width:100%;height:auto;display:block}.ts-stage canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}.ts-camera>button.primary{width:100%;margin-bottom:.6rem}.ts-options{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.5rem;padding:.6rem 0}.ts-options label{min-width:0}.ts-options input[type=checkbox]{width:auto;display:inline;margin-right:.4rem}
+
+/* Visor fixo em tela cheia, inspirado em câmeras nativas */
+.slot-sheet.ts-camera{position:fixed;inset:0;margin:0;width:100%;height:100%;height:100dvh;max-width:none;max-height:none;border-radius:0;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);box-sizing:border-box;background:#08090b;color:#fff;overflow:hidden}
+.ts-camera[open]{display:grid;grid-template-rows:56px minmax(0,1fr) auto 108px}
+.ts-camera::backdrop{background:#08090b}
+.ts-camera .sheet-head{margin:0;padding:0 12px;display:grid;grid-template-columns:44px 1fr 44px;align-items:center;text-align:center}
+.ts-camera .sheet-head h3{font-size:11px;letter-spacing:.2em;color:#d5d5d8;font-weight:600}
+.ts-camera .ts-icon{display:grid;place-items:center;width:44px;height:44px;padding:0;border:0;border-radius:50%;background:#24252a;color:#fff;box-shadow:none;min-width:0}
+.ts-camera .ts-stage{margin:0;min-height:0;display:grid;place-items:center;overflow:hidden;background:#000}
+.ts-camera .ts-stage video,.ts-camera .ts-stage canvas{grid-area:1/1;position:static;width:100%;height:100%;min-height:0;max-height:100%;object-fit:contain;display:block}
+.ts-camera .ts-stage canvas{pointer-events:none}
+.ts-camera [role=status]{margin:0;text-align:center;font-size:12px;color:#ddd;padding:0 12px}
+.ts-camera [role=status]:empty{display:none}
+.ts-camera .ts-controls{grid-row:4;display:grid;grid-template-columns:1fr 1fr 1fr;align-items:center;justify-items:center;padding:8px 16px}
+.ts-camera .ts-shutter{width:76px;height:76px;min-width:76px;min-height:76px;border:4px solid white;border-radius:50%;padding:5px;background:#08090b;box-shadow:none;display:grid;place-items:center}
+.ts-camera .ts-shutter::after{content:'';display:block;width:100%;height:100%;border-radius:50%;background:white}
+.ts-camera .ts-shutter:active::after{background:#aaa}
+.ts-camera .ts-shutter:disabled{opacity:.35}
+.ts-camera .ts-settings{position:absolute;z-index:2;top:calc(env(safe-area-inset-top) + 56px);right:12px;width:min(360px,calc(100% - 24px));max-height:calc(100% - 180px);overflow:auto;border-radius:16px;background:#202126;color:white;box-shadow:0 8px 32px #0008;padding:12px;box-sizing:border-box}
+.ts-camera .ts-settings:not([open]){display:none}
+.ts-camera .ts-settings summary{font-size:14px;font-weight:600}
+.ts-camera .ts-settings label{color:white;font-size:13px}
+.ts-camera .ts-settings input,.ts-camera .ts-settings select{color:#111;background:#fff}
+@media (orientation:landscape) and (max-height:550px){.ts-camera[open]{grid-template-columns:minmax(0,1fr) 104px;grid-template-rows:44px minmax(0,1fr) auto}.ts-camera .sheet-head{grid-column:1/-1}.ts-camera .ts-controls{grid-column:2;grid-row:2/4;grid-template-columns:1fr;grid-template-rows:1fr 1fr 1fr;padding:4px}.ts-camera .ts-stage{grid-column:1;grid-row:2}.ts-camera [role=status]{grid-column:1;grid-row:3}.ts-camera .ts-shutter{width:64px;height:64px;min-width:64px;min-height:64px}}

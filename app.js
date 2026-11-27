@@ -1,5 +1,5 @@
-import { openCamera } from './camera.js?v=16';
-import { renderSheets, makePDF, makeWord } from './exports.js?v=16';
+import { openCamera } from './camera.js?v=17';
+import { renderSheets, makePDF, makeWord } from './exports.js?v=17';
 const $ = id => document.getElementById(id);
 const create = (tag, text) => {
   const element = document.createElement(tag);
