@@ -1,4 +1,5 @@
-import { renderSheets, makePDF, makeWord } from './exports.js?v=15';
+import { openCamera } from './camera.js?v=16';
+import { renderSheets, makePDF, makeWord } from './exports.js?v=16';
 const $ = id => document.getElementById(id);
 const create = (tag, text) => {
   const element = document.createElement(tag);
@@ -270,7 +271,7 @@ async function readStamp(slot,report,photo,version,manual=false) {
     refreshSlot(slot);
   }
 }
-function addPhoto(slot,report,file) {
+function addPhoto(slot,report,file,capture=null) {
   const state = stateOf(slot);
   const version = ++state.version;
   state.text = '';
@@ -280,7 +281,9 @@ function addPhoto(slot,report,file) {
   const task = Promise.all([resizePhoto(file),exifDate(file)]).then(async ([photo,taken]) => {
     if (version !== state.version) return;
     slot.image = photo;
-    if (canReplace(slot,'date')) setAuto(slot,'date',taken || iso(new Date()),taken ? 'exif' : 'today');
+    if(capture){photo.original=capture.original;photo.capturedAt=capture.capturedAt;photo.gps=capture.gps;}
+    if(capture) setAuto(slot,'date',capture.date,'capture');
+    else if (canReplace(slot,'date')) setAuto(slot,'date',taken || iso(new Date()),taken ? 'exif' : 'today');
     for (const key of ['company','place']) {
       if (!slot[key]?.trim()) {
         const previous = lastValue(key,report,slot);
@@ -289,7 +292,7 @@ function addPhoto(slot,report,file) {
     }
     persist(report);
     refreshSlot(slot);
-    await readStamp(slot,report,photo,version);
+    if(capture){state.reading=false;state.message='Timestamp registrado na captura.';refreshSlot(slot);}else await readStamp(slot,report,photo,version);
   }).catch(() => {
     state.reading = false;
     state.message = 'Não foi possível abrir essa imagem. Tente outra foto.';
@@ -319,7 +322,7 @@ function choosePhoto(file) {
 }
 function askPhoto(slot,report,label,camera=false) {
   photoTarget = {slot,report,label};
-  (camera ? cameraInput : pickerInput).click();
+  openCamera({place:slot.place || lastValue('place',report,slot),company:slot.company || lastValue('company',report,slot),owner:report.details.owner || ''},(file,capture)=>{addPhoto(slot,report,file,capture);sheet.open(slot,report,label)},()=>cameraInput.click(),()=>pickerInput.click());
 }
 
 // ---- Folha de edição de uma foto ----
@@ -377,11 +380,13 @@ const sheet = (() => {
   const tools = create('div');
   tools.className = 'actions tools';
   const change = create('button','Trocar foto');
-  const camera = create('button','Câmera');
+  const camera = create('button','Câmera Timestamp');
+  const original = create('button','Salvar original');
+  original.onclick=()=>{if(api.slot?.image?.original)download(new File([api.slot.image.original],'foto-original.png',{type:'image/png'}));};
   const read = create('button','Ler carimbo');
   const copy = create('button','Copiar texto do carimbo');
   const remove = create('button','Remover foto');
-  tools.append(change,camera,read,copy,remove);
+  tools.append(change,camera,original,read,copy,remove);
   dialog.append(head,preview,status,description,grid,place,tools);
   document.body.append(dialog);
   const api = {
@@ -404,6 +409,7 @@ const sheet = (() => {
       status.textContent = state.message;
       status.hidden = !state.message;
       read.hidden = remove.hidden = !slot.image;
+      original.hidden = !slot.image?.original;
       read.disabled = state.reading;
       copy.hidden = !state.text;
       change.textContent = slot.image ? 'Trocar foto' : 'Escolher foto';

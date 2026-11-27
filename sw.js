@@ -1,7 +1,7 @@
 const cachePrefix = 'relatorio-semanal-';
-const cacheName = cachePrefix + 'v15';
+const cacheName = cachePrefix + 'v16';
 const scope = new URL(self.registration.scope);
-const assets = ['/', '/index.html', '/style.css', '/app.js', '/exports.js', '/stamp.js', '/manifest.webmanifest', '/rl-180.png', '/rl-192.png', '/rl-512.png'];
+const assets = ['/', '/index.html', '/style.css', '/app.js', '/camera.js', '/exports.js', '/stamp.js', '/manifest.webmanifest', '/rl-180.png', '/rl-192.png', '/rl-512.png'];
 self.addEventListener('install', event => {
   const requests = assets.map(path => new Request(new URL('.'+path,scope),{cache:'reload'}));
   event.waitUntil(caches.open(cacheName).then(cache => cache.addAll(requests)).then(() => self.skipWaiting()));
@@ -19,7 +19,7 @@ self.addEventListener('fetch', event => {
     }
     try {
       const response = await fetch(event.request,{cache:'no-cache'});
-      if (response.ok && (path.startsWith('/ocr/') || path === '/stamp.js')) {
+      if (response.ok && (path.startsWith('/ocr/') || assets.includes(path))) {
         try { await cache.put(event.request,response.clone()); } catch {}
       }
       return response;
