@@ -1,6 +1,6 @@
 function projectProgress(report){const m=new Map();for(const s of report.pages.flat()){const name=s.activity?.trim();if(!name||s.progress==null||s.progress===''||!Number.isFinite(Number(s.progress)))continue;const k=name.toLocaleLowerCase('pt-BR');if(!m.has(k)||(s.date||'')>=m.get(k).date)m.set(k,{name,value:Number(s.progress),date:s.date||''});}return [...m.values()];}
-import { openCamera } from './camera.js?v=22';
-import { renderSheets, makePDF, makeWord } from './exports.js?v=22';
+import { openCamera } from './camera.js?v=23';
+import { renderSheets, makePDF, makeWord } from './exports.js?v=23';
 const $ = id => document.getElementById(id);
 const create = (tag, text) => {
   const element = document.createElement(tag);

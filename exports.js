@@ -76,9 +76,9 @@ export async function renderSheets(report, fields, period, dateFormat) {
     text('FORM-CORP-SMS-030',1025,70,18,{bold:true,align:'center'});
     text('GS2 – USO INTERNO',1025,106,18,{bold:true,align:'center'});
     text('Rev.: 00',1025,142,18,{bold:true,align:'center'});
-    ctx.fillRect(L-10,168,R-L+20,3);
+    
 
-    rounded(L-12,22,R-L+24,158,14);ctx.strokeStyle=navy;ctx.lineWidth=1.5;ctx.stroke();
+    rounded(L-12,22,R-L+24,158,18);ctx.strokeStyle=navy;ctx.lineWidth=3;ctx.stroke();
     let top=200;
     if (pageIndex === 0) {
       text('FORMULÁRIO',W/2,228,21,{bold:true,align:'center'});
@@ -112,7 +112,7 @@ export async function renderSheets(report, fields, period, dateFormat) {
       box(670,y,c[4]-670,48);
       const pw=text('Período: ',680,y+30,17,{bold:true});
       text('de '+period.replace(' a ',' a '),680+pw,y+30,17,{max:c[4]-690-pw});
-      top=y+48+28;const projects=projectProgress(report);if(projects.length){text('AVANÇO FÍSICO DOS PROJETOS',L,top+15,15,{bold:true,color:navyBlue});top+=22;const cols=Math.ceil(projects.length/18),rows=Math.ceil(projects.length/cols),cw=(R-L)/cols;projects.forEach((item,i)=>{const x=L+Math.floor(i/rows)*cw,yy=top+(i%rows)*42;text(item.name,x,yy+13,12,{max:cw*.48});const bx=x+cw*.5,bw=cw*.35;ctx.fillStyle='#dedbea';ctx.fillRect(bx,yy+4,bw,8);ctx.fillStyle='#8eb900';ctx.fillRect(bx,yy+4,bw*item.value/100,8);text(item.value+'%',x+cw*.87,yy+13,12,{bold:true});});top+=rows*42+12;}
+      top=y+48+28;const projects=projectProgress(report);if(projects.length){const chartTop=top;rounded(L,chartTop,R-L,Math.min(990,100+projects.length*48),18);ctx.fillStyle='#f7f7fa';ctx.fill();ctx.strokeStyle=navyBlue;ctx.lineWidth=2;ctx.stroke();text('AVANÇO FÍSICO DOS PROJETOS',W/2,top+35,22,{bold:true,color:navyBlue,align:'center'});top+=65;const cols=Math.ceil(projects.length/18),rows=Math.ceil(projects.length/cols),cw=(R-L)/cols;projects.forEach((item,i)=>{const x=L+20+Math.floor(i/rows)*cw,yy=top+(i%rows)*42;text(item.name,x,yy+16,17,{max:cw*.43});const bx=x+cw*.46,bw=cw*.36;rounded(bx,yy+3,bw,15,6);ctx.fillStyle='#dedbea';ctx.fill();if(item.value>0){ctx.save();ctx.clip();ctx.fillStyle='#a5cc00';ctx.fillRect(bx,yy+3,bw*item.value/100,15);ctx.restore();}text(item.value+'%',x+cw*.85,yy+16,17,{bold:true,color:navyBlue});});top+=rows*42+12;}
     }
 
     const bottom=1605;
