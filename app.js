@@ -1,6 +1,6 @@
-function projectProgress(report){const m=new Map();for(const s of report.pages.flat()){const name=s.activity?.trim();if(!name||s.progress==null||s.progress===''||!Number.isFinite(Number(s.progress)))continue;const k=name.toLocaleLowerCase('pt-BR');if(!m.has(k)||(s.date||'')>=m.get(k).date)m.set(k,{name,value:Number(s.progress),date:s.date||''});}return [...m.values()];}
-import { openCamera } from './camera.js?v=28';
-import { renderSheets, makePDF, makeWord } from './exports.js?v=28';
+function projectProgress(report){const m=new Map();for(const s of report.pages.flat()){const name=s.activity?.trim();if(!name)continue;const k=name.normalize('NFD').replace(/\p{M}/gu,'').toLocaleLowerCase('pt-BR').replace(/\s+/g,' ');const item=m.get(k)||{name,value:null,date:'',updated:0,count:0};if(s.image)item.count++;const valid=s.progress!=null&&String(s.progress).trim()!==''&&Number.isFinite(Number(s.progress));const updated=s.progressUpdated||0;if(valid&& (item.value===null||updated>item.updated||updated===item.updated&&(s.date||'')>=item.date)){item.value=Math.max(0,Math.min(100,Number(s.progress)));item.date=s.date||'';item.updated=updated;}m.set(k,item);}return [...m.values()];}
+import { openCamera } from './camera.js?v=29';
+import { renderSheets, makePDF, makeWord } from './exports.js?v=29';
 const $ = id => document.getElementById(id);
 const create = (tag, text) => {
   const element = document.createElement(tag);
@@ -225,6 +225,7 @@ let formUpdater = () => {};
 const canReplace = (slot,key) => !slot[key]?.trim() || Boolean(slot.auto?.[key]);
 function setAuto(slot,key,value,source) {
   slot[key] = value;
+  if(key==='progress')slot.progressUpdated=Date.now();
   slot.auto ??= {};
   slot.auto[key] = source;
 }
@@ -248,7 +249,7 @@ async function readStamp(slot,report,photo,version,manual=false) {
   refreshSlot(slot);
   try {
     if(photo.stampDescription){state.text=photo.stampText||photo.stampDescription;if(manual||!slot.description?.trim()){userChange(slot,report,'description',photo.stampDescription);state.message='Descrição do carimbo preenchida.';}else state.message='Descrição existente preservada. Use Copiar carimbo para substituir.';return;}
-    const {readStampInfo} = await import('./stamp.js?v=28');
+    const {readStampInfo} = await import('./stamp.js?v=29');
     const result = await readStampInfo(photo,{places:savedOptions('place'),companies:savedOptions('company')});
     if (version !== state.version || slot.image !== photo) return;
     state.text = result.text;photo.stampText=result.text;persist(report);
@@ -508,7 +509,7 @@ function formBlock(report) {
       cell('Tipo de Evidência:','l'),cell('( X ) '+(d.evidence || 'Foto / Imagem'),'span3'),
       cell('Descrição da ação: '+(d.summary || ''),'span2'),cell('Período: de '+period(report.start),'span2'));
   };
-  const chart=create('div');chart.className='lp-project-chart';const refresh=()=>{const data=projectProgress(report);chart.hidden=false;chart.replaceChildren(create('b','AVANÇO FÍSICO DOS PROJETOS'));if(!data.length){const empty=create('p','Nenhum avanço informado neste período.');empty.className='lp-chart-empty';chart.append(empty);}for(const item of data){const row=create('div');const track=create('span');track.className='lp-progress-track';const fill=create('span');fill.className='lp-progress-fill';fill.style.width=item.value+'%';track.append(fill);row.append(create('span',item.name),track,create('b',item.value+'%'));chart.append(row);}};formUpdater=()=>{update();refresh();};
+  const chart=create('div');chart.className='lp-project-chart';const refresh=()=>{const data=projectProgress(report);chart.hidden=false;chart.replaceChildren(create('b','AVANÇO FÍSICO DOS PROJETOS'));if(!data.length)chart.append(create('p','Nenhuma atividade registrada.'));for(const item of data){const row=create('section');row.className='lp-summary-item';const head=create('div');head.append(create('b',item.name),create('b',item.value===null?'Não informado':item.value+'%'));row.append(head);if(item.value!==null){const track=create('span');track.className='lp-progress-track';const fill=create('span');fill.className='lp-progress-fill';fill.style.width=item.value+'%';track.append(fill);row.append(track);}row.append(create('small',item.count+' registros fotográficos'));chart.append(row);}const totals=create('section');totals.className='lp-summary-totals';for(const [n,v] of [['Atividades',data.length],['Fotografias',report.pages.flat().filter(s=>s.image).length],['Concluídas',data.filter(s=>s.value===100).length]]){const c=create('span');c.append(create('b',String(v)),create('small',n));totals.append(c);}chart.append(totals);};formUpdater=()=>{update();refresh();};
   update();
   refresh();const group=create('div');group.append(wrap,chart);return group;
 }
