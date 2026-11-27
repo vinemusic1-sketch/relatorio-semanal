@@ -1,4 +1,4 @@
-import { renderSheets, makePDF, makeWord } from './exports.js';
+import { renderSheets, makePDF, makeWord } from './exports.js?v=15';
 const $ = id => document.getElementById(id);
 const create = (tag, text) => {
   const element = document.createElement(tag);
@@ -630,4 +630,4 @@ try {
 } catch {
   setStatus('Armazenamento local indisponível neste navegador.');
 }
-if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(() => {});
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js',{updateViaCache:'none'}).catch(() => {});
