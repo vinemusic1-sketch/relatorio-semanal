@@ -1,5 +1,6 @@
-import { openCamera } from './camera.js?v=20';
-import { renderSheets, makePDF, makeWord } from './exports.js?v=20';
+function projectProgress(report){const m=new Map();for(const s of report.pages.flat()){const name=s.activity?.trim();if(!name||s.progress==null||s.progress===''||!Number.isFinite(Number(s.progress)))continue;const k=name.toLocaleLowerCase('pt-BR');if(!m.has(k)||(s.date||'')>=m.get(k).date)m.set(k,{name,value:Number(s.progress),date:s.date||''});}return [...m.values()];}
+import { openCamera } from './camera.js?v=21';
+import { renderSheets, makePDF, makeWord } from './exports.js?v=21';
 const $ = id => document.getElementById(id);
 const create = (tag, text) => {
   const element = document.createElement(tag);
@@ -12,7 +13,7 @@ const fields = [
   ['owner','Responsável pela ação',''], ['reportDate','Data',''], ['evidence','Tipo de evidência','Foto / Imagem'],
   ['summary','Descrição da ação','Registro Semanal de Atividades']
 ];
-const emptyPage = () => Array.from({length:4}, () => ({date:'', company:'', place:'', description:'', activity:'', progress:'', image:null}));
+const emptyPage = () => Array.from({length:4}, () => ({date:'', company:'', place:'', description:'', activity:'', progress:'', serviceProgress:'', image:null}));
 const iso = d => [d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('-');
 const parse = d => new Date(d+'T12:00:00');
 const fmt = d => d ? d.split('-').reverse().join('/') : '';
@@ -238,7 +239,7 @@ function userChange(slot,report,key,value) {
   slot.auto[key] = false;
   if (key !== 'date' && !slot.date) setAuto(slot,'date',iso(new Date()),'today');
   persist(report);
-  cellUpdaters.get(slot)?.();
+  cellUpdaters.get(slot)?.();formUpdater();
 }
 async function readStamp(slot,report,photo,version,manual=false) {
   const state = stateOf(slot);
@@ -348,7 +349,7 @@ const sheet = (() => {
     const input = create(type === 'textarea' ? 'textarea' : 'input');
     if (type !== 'textarea') input.type = type;
     if (type === 'text') input.autocomplete = 'off';
-    input.addEventListener('input',() => {if(api.slot && (key!=='progress' || input.value==='' || (input.validity.valid && Number.isFinite(Number(input.value))))) userChange(api.slot,api.report,key,input.value);});
+    input.addEventListener('input',() => {if(api.slot && (!['progress','serviceProgress'].includes(key) || input.value==='' || (input.validity.valid && Number.isFinite(Number(input.value))))) userChange(api.slot,api.report,key,input.value);});
     line.append(input);
     if (picker) {
       const chooser = create('select');
@@ -392,7 +393,7 @@ const sheet = (() => {
   const remove = create('button','Remover foto');
   tools.append(change,camera,original,read,copy,remove);
   const content=create('div');content.className='edit-content';
-  content.append(preview,status,grid,place,activity,progress,description,tools);
+  const service=field('Avanço do serviço (%)','serviceProgress','number');Object.assign(inputs.serviceProgress,{min:'0',max:'100',step:'1',inputMode:'numeric',placeholder:'Não informado'});content.append(preview,status,grid,place,activity,progress,description,service,tools);
   dialog.append(head,content);
   const viewport=window.visualViewport;
   function fitEditor(){
@@ -427,7 +428,7 @@ const sheet = (() => {
       const slot = api.slot;
       if (!slot) return;
       const state = stateOf(slot);
-      for (const key of ['date','company','place','description','activity','progress']) {
+      for (const key of ['date','company','place','description','activity','progress','serviceProgress']) {
         if (all || document.activeElement !== inputs[key]) inputs[key].value = slot[key] || (key === 'date' ? iso(new Date()) : '');
       }
       preview.hidden = !slot.image;
@@ -494,9 +495,9 @@ function formBlock(report) {
       cell('Tipo de Evidência:','l'),cell('( X ) '+(d.evidence || 'Foto / Imagem'),'span3'),
       cell('Descrição da ação: '+(d.summary || ''),'span2'),cell('Período: de '+period(report.start),'span2'));
   };
-  formUpdater = update;
+  const chart=create('div');chart.className='lp-project-chart';const refresh=()=>{const data=projectProgress(report);chart.hidden=!data.length;chart.replaceChildren(create('b','AVANÇO FÍSICO DOS PROJETOS'));for(const item of data){const row=create('div');const track=create('span');track.className='lp-progress-track';const fill=create('span');fill.className='lp-progress-fill';fill.style.width=item.value+'%';track.append(fill);row.append(create('span',item.name),track,create('b',item.value+'%'));chart.append(row);}};formUpdater=()=>{update();refresh();};
   update();
-  return wrap;
+  refresh();const group=create('div');group.append(wrap,chart);return group;
 }
 function liveCell(slot,index,pageIndex,report) {
   const label = 'Foto '+(index+1)+' · Página '+(pageIndex+1);
@@ -554,7 +555,7 @@ function liveCell(slot,index,pageIndex,report) {
     badge.hidden = !state.reading;
     desc.textContent = slot.description || '';
     desc.classList.toggle('empty',!slot.description?.trim());
-    if (!slot.description?.trim()) desc.textContent = slot.image ? 'Toque para descrever' : '';
+    if (!slot.description?.trim()) desc.textContent = slot.image ? 'Toque para descrever' : '';if(slot.serviceProgress!=null&&slot.serviceProgress!==''){const row=create('span');row.className='lp-service';const track=create('span');track.className='lp-progress-track';const fill=create('span');fill.className='lp-progress-fill';fill.style.width=Number(slot.serviceProgress)+'%';track.append(fill);row.append(create('b','Serviço '+slot.serviceProgress+'%'),track);desc.append(row);}
   };
   cellUpdaters.set(slot,update);
   update();
@@ -614,7 +615,7 @@ $('view').onclick = async () => {
     await Promise.all(pending);
     const report = structuredClone(current);
     while (report.pages.length > 1 && report.pages.at(-1).every(slot =>
-      !slot.image && ![slot.date,slot.company,slot.place,slot.description,slot.activity,slot.progress].some(value => value?.trim()))) {
+      !slot.image && ![slot.date,slot.company,slot.place,slot.description,slot.activity,slot.progress,slot.serviceProgress].some(value => value?.trim()))) {
       report.pages.pop();
     }
     const name = 'Relatorio-Semanal-'+report.start;
