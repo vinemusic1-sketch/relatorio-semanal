@@ -274,7 +274,7 @@ export async function makeEditableWord(report,period,dateFormat,name) {
   }
   function table(rows,widths,innerLines=true) {
     const borders=sides.map(side=>!innerLines&&side.startsWith('inside')?blankBorder(side):border(side)).join('');
-    return '<w:tbl><w:tblPr><w:tblW w:type="dxa" w:w="'+frameWidth+'"/><w:jc w:val="center"/><w:tblBorders>'+
+    return '<w:tbl><w:tblPr><w:tblW w:type="pct" w:w="4759"/><w:jc w:val="center"/><w:tblBorders>'+
       borders+'</w:tblBorders><w:tblLayout w:type="fixed"/><w:tblCellMar><w:top w:w="45" w:type="dxa"/><w:left w:w="95" w:type="dxa"/>'+
       '<w:bottom w:w="45" w:type="dxa"/><w:right w:w="95" w:type="dxa"/></w:tblCellMar></w:tblPr><w:tblGrid>'+
       widths.map(width=>'<w:gridCol w:w="'+width+'"/>').join('')+'</w:tblGrid>'+
@@ -348,7 +348,7 @@ export async function makeEditableWord(report,period,dateFormat,name) {
   const formBorders=['top','left','bottom','right','insideH','insideV'].map(side=>
     '<w:'+side+' w:val="single" w:sz="6" w:color="190A60"/>'
   ).join('');
-  const formGridStart='<w:tbl><w:tblPr><w:tblW w:type="dxa" w:w="10000"/><w:jc w:val="center"/><w:tblBorders>'+formBorders+
+  const formGridStart='<w:tbl><w:tblPr><w:tblW w:type="pct" w:w="4759"/><w:jc w:val="center"/><w:tblBorders>'+formBorders+
     '</w:tblBorders><w:tblLayout w:type="fixed"/><w:tblCellMar><w:left w:w="95" w:type="dxa"/><w:right w:w="95" w:type="dxa"/></w:tblCellMar></w:tblPr><w:tblGrid>'+
     formWidths.map(width=>'<w:gridCol w:w="'+width+'"/>').join('')+'</w:tblGrid>';
   const formGridRows=formRows.map((row,index)=>{
@@ -363,13 +363,6 @@ export async function makeEditableWord(report,period,dateFormat,name) {
         }).join('')+'</w:tr>';
     }).join('');
   const projects=projectProgress(report);
-  const projectRows=projects.map(item=>{
-    const percent=item.value===null?'Não informado':item.value+'%';
-    const count=Math.max(0,Math.min(20,Math.round((item.value??0)/5)));
-    const bar=item.value===null?'':paragraph('■'.repeat(count),{color:'507200',size:15});
-    return paragraph(item.name+' · '+percent,{bold:true})+bar+
-      paragraph(item.count+' registros fotográficos',{size:17,color:'595568'});
-  }).join('')||paragraph('Nenhuma atividade registrada.',{center:true});
   const totals=projects.length+' atividades   ·   '+report.pages.flat().filter(slot=>slot.image).length+
     ' fotografias   ·   '+projects.filter(item=>item.value===100).length+' concluídas';
   const mergedCell=(content,fill,width,span)=>cell(content,fill,width)
@@ -378,9 +371,23 @@ export async function makeEditableWord(report,period,dateFormat,name) {
   const headerRow='<w:tr>'+headerCells[0].replace('w:w="2500"','w:w="2700"')+
     headerCells[1].replace('<w:tcW w:type="dxa" w:w="4700"/>','<w:tcW w:type="dxa" w:w="3600"/><w:gridSpan w:val="2"/>')+
     headerCells[2].replace('w:w="2800"','w:w="3700"')+'</w:tr>';
-  const summary=fullRow(paragraph('AVANÇO FÍSICO DOS PROJETOS',{bold:true,center:true})+projectRows+
-    paragraph(totals,{bold:true,center:true}),'F7F7FA');
-  const firstPage=formGridStart+headerRow+fullRow(formTitle)+formGridRows+summary+'</w:tbl>';
+  const progressWidths=[5400,2200,2400];
+  const progressHeading=mergedCell(paragraph('AVANÇO FÍSICO DOS PROJETOS',{bold:true,center:true,color:'FFFFFF',size:22}),
+    '190A60',frameWidth,3);
+  const columnLabels=['Atividade','Avanço','Registros fotográficos'].map((label,index)=>
+    cell(paragraph(label,{bold:true,center:index>0}),'E9E6F4',progressWidths[index])
+  ).join('');
+  const progressRows=projects.map((item,index)=>{
+    const fill=index%2?'F7F7FA':'FFFFFF';
+    const percent=item.value===null?'Não informado':item.value+'%';
+    return cell(paragraph(item.name,{bold:true}),fill,progressWidths[0])+
+      cell(paragraph(percent,{bold:true,center:true}),item.value===null?fill:'E8F4C8',progressWidths[1])+
+      cell(paragraph(String(item.count),{center:true}),fill,progressWidths[2]);
+  });
+  if (!progressRows.length) progressRows.push(mergedCell(paragraph('Nenhuma atividade registrada.',{center:true}),'FFFFFF',frameWidth,3));
+  const progressFooter=mergedCell(paragraph(totals,{bold:true,center:true}),'E9E6F4',frameWidth,3);
+  const summary=table([progressHeading,columnLabels,...progressRows,progressFooter],progressWidths);
+  const firstPage=formGridStart+headerRow+fullRow(formTitle)+formGridRows+'</w:tbl>'+gap()+summary;
   const pageBreak='<w:p><w:pPr><w:spacing w:before="0" w:after="0"/></w:pPr><w:r><w:br w:type="page"/></w:r></w:p>';
   const evidencePages=await Promise.all(report.pages.map(async slots=>{
     const [top,bottom]=await Promise.all([evidencePair(slots[0],slots[1]),evidencePair(slots[2],slots[3])]);
