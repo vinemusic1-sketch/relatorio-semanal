@@ -1,6 +1,6 @@
 function projectProgress(report){const m=new Map();for(const s of report.pages.flat()){const name=s.activity?.trim();if(!name||s.progress==null||s.progress===''||!Number.isFinite(Number(s.progress)))continue;const k=name.toLocaleLowerCase('pt-BR');if(!m.has(k)||(s.date||'')>=m.get(k).date)m.set(k,{name,value:Number(s.progress),date:s.date||''});}return [...m.values()];}
-import { openCamera } from './camera.js?v=27';
-import { renderSheets, makePDF, makeWord } from './exports.js?v=27';
+import { openCamera } from './camera.js?v=28';
+import { renderSheets, makePDF, makeWord } from './exports.js?v=28';
 const $ = id => document.getElementById(id);
 const create = (tag, text) => {
   const element = document.createElement(tag);
@@ -247,8 +247,8 @@ async function readStamp(slot,report,photo,version,manual=false) {
   state.message = 'Lendo o carimbo da foto…';
   refreshSlot(slot);
   try {
-    if(photo.stampDescription){state.text=photo.stampText||photo.stampDescription;if(!slot.description?.trim())userChange(slot,report,'description',photo.stampDescription);state.message='Descrição do carimbo preenchida.';return;}
-    const {readStampInfo} = await import('./stamp.js?v=27');
+    if(photo.stampDescription){state.text=photo.stampText||photo.stampDescription;if(manual||!slot.description?.trim()){userChange(slot,report,'description',photo.stampDescription);state.message='Descrição do carimbo preenchida.';}else state.message='Descrição existente preservada. Use Copiar carimbo para substituir.';return;}
+    const {readStampInfo} = await import('./stamp.js?v=28');
     const result = await readStampInfo(photo,{places:savedOptions('place'),companies:savedOptions('company')});
     if (version !== state.version || slot.image !== photo) return;
     state.text = result.text;photo.stampText=result.text;persist(report);
@@ -262,7 +262,7 @@ async function readStamp(slot,report,photo,version,manual=false) {
     const excluded=[norm(slot.place),norm(slot.company)].filter(Boolean);
     const lines=(result.text||'').split(/\r?\n/).map(s=>s.trim()).filter(s=>s&&!/^(GPS|latitude|longitude)\b/i.test(s)&&!/\d{1,2}[\/.-]\d{1,2}[\/.-]\d{2,4}|\d{1,2}:\d{2}|-?\d+[.,]\d{4,}/.test(s)&&!excluded.includes(norm(s))&&/\p{L}{3}/u.test(s));
     const description=[...new Map(lines.map(s=>[norm(s),s])).values()].join('\n');
-    if(description&&!slot.description?.trim()){userChange(slot,report,'description',description);filled.push('Descrição');}
+    if(description&&(manual||!slot.description?.trim())){userChange(slot,report,'description',description);filled.push('Descrição');}
     if (filled.length) {
       persist(report);
       state.message = filled.join(', ')+' lido'+(filled.length > 1 ? 's' : '')+' do carimbo. Confira e ajuste se precisar.';
@@ -435,7 +435,7 @@ const sheet = (() => {
       if (!slot) return;
       const state = stateOf(slot);
       for (const key of ['date','company','place','description','activity','progress','serviceProgress']) {
-        if (all || document.activeElement !== inputs[key]) inputs[key].value = slot[key] || (key === 'date' ? iso(new Date()) : '');
+        if (all || document.activeElement !== inputs[key]) inputs[key].value = slot[key] ?? (key === 'date' ? iso(new Date()) : '');
       }
       preview.hidden = !slot.image;
       if (slot.image) preview.src = slot.image.url; else preview.removeAttribute('src');
@@ -466,11 +466,11 @@ const sheet = (() => {
     const value=slot.image.stampDescription||raw.split(/\r?\n/).map(x=>x.trim()).filter(x=>x&&!/^(GPS|latitude|longitude)\b/i.test(x)&&! /\d{1,2}[\/.-]\d{1,2}[\/.-]\d{2,4}|\d{1,2}:\d{2}/.test(x)&&x.toLowerCase()!==(slot.company||'').trim().toLowerCase()).join('\n');
     if(!value.trim()){state.message='Nenhuma descrição identificada no carimbo. Use Ler carimbo.';api.sync();return;}
     const previous=slot.description||'';
-    const next=previous.trim()?(previous.includes(value)?previous:previous+'\n'+value):value;
+    const next=value.trim();
     userChange(slot,api.report,'description',next);
     inputs.description.value=next;
     state.message='Texto do carimbo inserido na descrição.';
-    api.sync();
+    api.sync(true);
   };
   remove.onclick = () => removePhoto(api.slot,api.report);
   return api;
