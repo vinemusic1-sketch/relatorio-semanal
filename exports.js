@@ -228,9 +228,8 @@ export async function makePDF(sheets,name) {
 
 const relationship = (id,type,target) => '<Relationship Id="'+id+'" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/'+type+'" Target="'+target+'"/>';
 const relationships = content => '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'+content+'</Relationships>';
-function wordPage(sheet,index) {
+function wordPage(sheet,index,width=7450000) {
   const id=index+1;
-  const width=7450000;
   const height=Math.round(width*sheet.height/sheet.width);
   return '<w:p><w:pPr>'+(index ? '<w:pageBreakBefore/>' : '')+
     '<w:spacing w:before="0" w:after="0" w:line="240" w:lineRule="auto"/><w:jc w:val="center"/></w:pPr>'+
@@ -256,8 +255,10 @@ export function makeWord(sheets,pageImages,name) {
   return packageWord(files,links,body,name,'0');
 }
 
-export function makeEditableWord(report,fields,period,dateFormat,name) {
-  const files={}, links=[];
+export function makeEditableWord(report,formSheet,formImage,dateFormat,name) {
+  const formPath='media/formulario.png';
+  const files={['word/'+formPath]:jpeg(formImage)};
+  const links=[relationship('rId1','image',formPath)];
   const escape = value => String(value ?? '').replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g,'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&apos;'}[char]));
   function paragraph(value,{bold=false,color='190A60',size=20,page=false}={}) {
     const content=String(value ?? '').split('\n').map(line=>'<w:t xml:space="preserve">'+escape(line)+'</w:t>').join('<w:br/>');
@@ -298,21 +299,9 @@ export function makeEditableWord(report,fields,period,dateFormat,name) {
     paragraph('REGISTRO DE EVIDÊNCIA',{bold:true,size:25})+paragraph('FORM-CORP-SMS-030 · GS2 – USO INTERNO · Rev.: 00',{size:16});
   const footer = number => paragraph('BRAVA ENERGIA  ·  Pág. '+number+' de '+(report.pages.length+1),{bold:true,size:16})+
     paragraph('DOCUMENTOS IMPRESSOS SÃO CONSIDERADOS CÓPIAS NÃO CONTROLADAS',{size:15});
-  const fieldsRows=[];
-  for (let i=0;i<fields.length;i+=2) {
-    fieldsRows.push([fields[i],fields[i+1]].map(field=>{
-      if (!field) return cell(paragraph(''));
-      const [key,label]=field;
-      const value=report.details[key];
-      return cell(paragraph(label+': '+(key==='reportDate'?dateFormat(value):key==='evidence'?evidenceText(value):value??'')));
-    }).join(''));
-  }
-  const projects=projectProgress(report);
-  const summary=projects.map(item=>paragraph(item.name+' · '+(item.value===null?'Não informado':item.value+'%')+' · '+item.count+' registros fotográficos')).join('');
-  const body=heading(false)+paragraph('FORMULÁRIO',{bold:true})+table(fieldsRows)+paragraph('Período: '+period)+
-    paragraph('AVANÇO FÍSICO DOS PROJETOS',{bold:true})+summary+
-    paragraph(projects.length+' atividades · '+report.pages.flat().filter(slot=>slot.image).length+' fotografias · '+projects.filter(item=>item.value===100).length+' concluídas')+footer(1)+
-    report.pages.map((slots,index)=>heading(true)+table([...evidencePair(slots[0],slots[1]),...evidencePair(slots[2],slots[3])])+footer(index+2)).join('');
+  const body=wordPage(formSheet,0,6500000)+report.pages.map((slots,index)=>
+    heading(true)+table([...evidencePair(slots[0],slots[1]),...evidencePair(slots[2],slots[3])])+footer(index+2)
+  ).join('');
   return packageWord(files,links,body,name,'700');
 }
 
