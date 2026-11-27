@@ -1,6 +1,6 @@
 function projectProgress(report){const m=new Map();for(const s of report.pages.flat()){const name=s.activity?.trim();if(!name)continue;const k=name.normalize('NFD').replace(/\p{M}/gu,'').toLocaleLowerCase('pt-BR').replace(/\s+/g,' ');const item=m.get(k)||{name,value:null,date:'',updated:0,count:0};if(s.image)item.count++;const valid=s.progress!=null&&String(s.progress).trim()!==''&&Number.isFinite(Number(s.progress));const updated=s.progressUpdated||0;if(valid&& (item.value===null||updated>item.updated||updated===item.updated&&(s.date||'')>=item.date)){item.value=Math.max(0,Math.min(100,Number(s.progress)));item.date=s.date||'';item.updated=updated;}m.set(k,item);}return [...m.values()];}
 import { openCamera } from './camera.js?v=29';
-import { renderSheets, makePDF, makeWord } from './exports.js?v=30';
+import { renderSheets, makePDF, makeWord } from './exports.js?v=31';
 const $ = id => document.getElementById(id);
 const create = (tag, text) => {
   const element = document.createElement(tag);

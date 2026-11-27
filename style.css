@@ -27,7 +27,7 @@
 .lp-title{font-weight:700;font-size:2cqw;text-align:center}
 .lp-code{display:grid;gap:.9cqw;text-align:center;font-weight:700;font-size:1.5cqw;border-left:.2cqw solid #1b2a8c;padding:.5cqw 0}
 .live-page .lp-form{display:block;margin-top:2cqw;text-align:center}.lp-form>b{font-size:1.8cqw}
-.lp-table{display:grid;grid-template-columns:27% 18% 18% 37%;margin-top:1.4cqw;border-top:.12cqw solid #000;border-left:.12cqw solid #000;text-align:left;font-size:1.45cqw}
+.lp-table{border-radius:1.3cqw;overflow:hidden;display:grid;grid-template-columns:27% 18% 18% 37%;margin-top:1.4cqw;border-top:.12cqw solid #000;border-left:.12cqw solid #000;text-align:left;font-size:1.45cqw}
 .lp-table span{border-right:.12cqw solid #000;border-bottom:.12cqw solid #000;padding:1cqw .8cqw;font-weight:700;min-height:4.2cqw;display:flex;align-items:center}
 .lp-table .v{color:#2e74b5}.lp-table .v.empty{color:#c0392b;font-style:italic}.lp-table .span3{grid-column:span 3;font-weight:400}.lp-table .span2{grid-column:span 2;font-weight:400}
 .lp-frame{flex:1;min-height:0;display:grid;grid-template-rows:1fr 1fr;gap:2.4cqw;border:.12cqw solid #000;margin-top:2.2cqw;padding:1.4cqw .9cqw}

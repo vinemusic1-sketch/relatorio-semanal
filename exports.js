@@ -82,8 +82,14 @@ export async function renderSheets(report, fields, period, dateFormat) {
     let top=200;
     if (pageIndex === 0) {
       text('FORMULÁRIO',W/2,228,21,{bold:true,align:'center'});
-      const c=[L,400,615,825,R];
-      let y=250;
+      const formTop=250, formRadius=16;
+      const rowHeights=[50,56,48,64,48];
+      const formHeight=rowHeights.reduce((total,height)=>total+height,0);
+      const c=[0,.27,.45,.63,1].map(fraction=>L+Math.round((R-L)*fraction));
+      ctx.save();
+      rounded(L,formTop,R-L,formHeight,formRadius);
+      ctx.clip();
+      let y=formTop;
       const d=report.details;
       const cell=(label,content,x1,x2,h,{valueColor=value,boldValue=true}={}) => {
         box(x1,y,x2-x1,h);
@@ -100,19 +106,25 @@ export async function renderSheets(report, fields, period, dateFormat) {
       const row=(h,items) => { for (const item of items) cell(...item,h); y+=h; };
       const show=key => key === 'reportDate' ? dateFormat(d[key]) : (d[key] ?? '');
       const pair=(a,b,h) => row(h,[[labels[a],undefined,c[0],c[1]],['',show(a),c[1],c[2]],[labels[b],undefined,c[2],c[3]],['',show(b),c[3],c[4]]]);
-      pair('department','origin',50);
-      pair('reference','type',56);
-      pair('owner','reportDate',48);
-      box(c[0],y,c[1]-c[0],64); text(labels.evidence,c[0]+8,y+38,17,{bold:true});
-      box(c[1],y,c[4]-c[1],64); font(17); ctx.fillStyle=ink; wrap(ctx,evidenceText(d.evidence),c[1]+8,y+27,c[4]-c[1]-16,22,2);
-      y+=64;
-      box(c[0],y,670-c[0],48);
+      pair('department','origin',rowHeights[0]);
+      pair('reference','type',rowHeights[1]);
+      pair('owner','reportDate',rowHeights[2]);
+      box(c[0],y,c[1]-c[0],rowHeights[3]); text(labels.evidence,c[0]+8,y+38,17,{bold:true});
+      box(c[1],y,c[4]-c[1],rowHeights[3]); font(17); ctx.fillStyle=ink; wrap(ctx,evidenceText(d.evidence),c[1]+8,y+27,c[4]-c[1]-16,22,2);
+      y+=rowHeights[3];
+      const summaryBoundary=c[2];
+      box(c[0],y,summaryBoundary-c[0],rowHeights[4]);
       const w=text(labels.summary+' ',c[0]+8,y+30,17,{bold:true});
-      text(d.summary ?? '',c[0]+8+w,y+30,17,{max:670-c[0]-24-w});
-      box(670,y,c[4]-670,48);
-      const pw=text('Período: ',680,y+30,17,{bold:true});
-      text('de '+period.replace(' a ',' a '),680+pw,y+30,17,{max:c[4]-690-pw});
-      top=y+48+28;const projects=projectProgress(report);const cols=Math.max(1,Math.ceil(projects.length/12)),rows=Math.ceil(projects.length/cols),cw=(R-L-40)/cols,rh=Math.min(78,900/Math.max(1,rows));const chartH=140+Math.max(1,rows)*rh;rounded(L,top,R-L,chartH,18);ctx.fillStyle='#f7f7fa';ctx.fill();ctx.strokeStyle=navyBlue;ctx.lineWidth=2;ctx.stroke();text('AVANÇO FÍSICO DOS PROJETOS',W/2,top+35,22,{bold:true,color:navyBlue,align:'center'});if(!projects.length)text('Nenhuma atividade registrada.',W/2,top+85,20,{align:'center'});projects.forEach((item,i)=>{const x=L+20+Math.floor(i/rows)*cw,y=top+65+(i%rows)*rh;const label=item.value===null?'Não informado':item.value+'%';text(item.name,x,y,17,{bold:true,color:navyBlue,max:cw-135});text(label,x+cw-12,y,16,{bold:true,color:navyBlue,align:'right'});if(item.value!==null){const bw=cw-25;rounded(x,y+8,bw,12,5);ctx.fillStyle='#dedbea';ctx.fill();ctx.save();ctx.clip();const g=ctx.createLinearGradient(x,0,x+bw,0);g.addColorStop(0,'#ff574d');g.addColorStop(.5,'#ffbc32');g.addColorStop(1,'#ceff00');ctx.fillStyle=g;ctx.fillRect(x,y+8,bw*item.value/100,12);ctx.restore();}text(item.count+' registros fotográficos',x,y+35,13,{color:'#77758a'});});const totals=[['Atividades',projects.length],['Fotografias',report.pages.flat().filter(s=>s.image).length],['Concluídas',projects.filter(s=>s.value===100).length]];totals.forEach(([label,n],i)=>{const x=L+(R-L)*(i+.5)/3;text(String(n),x,top+chartH-45,28,{bold:true,color:navyBlue,align:'center'});text(label,x,top+chartH-20,16,{color:navyBlue,align:'center'});});
+      text(d.summary ?? '',c[0]+8+w,y+30,17,{max:summaryBoundary-c[0]-24-w});
+      box(summaryBoundary,y,c[4]-summaryBoundary,rowHeights[4]);
+      const pw=text('Período: ',summaryBoundary+10,y+30,17,{bold:true});
+      text('de '+period.replace(' a ',' a '),summaryBoundary+10+pw,y+30,17,{max:c[4]-summaryBoundary-20-pw});
+      ctx.restore();
+      rounded(L,formTop,R-L,formHeight,formRadius);
+      ctx.strokeStyle=ink;
+      ctx.lineWidth=1.5;
+      ctx.stroke();
+      top=formTop+formHeight+28;const projects=projectProgress(report);const cols=Math.max(1,Math.ceil(projects.length/12)),rows=Math.ceil(projects.length/cols),cw=(R-L-40)/cols,rh=Math.min(78,900/Math.max(1,rows));const chartH=140+Math.max(1,rows)*rh;rounded(L,top,R-L,chartH,18);ctx.fillStyle='#f7f7fa';ctx.fill();ctx.strokeStyle=navyBlue;ctx.lineWidth=2;ctx.stroke();text('AVANÇO FÍSICO DOS PROJETOS',W/2,top+35,22,{bold:true,color:navyBlue,align:'center'});if(!projects.length)text('Nenhuma atividade registrada.',W/2,top+85,20,{align:'center'});projects.forEach((item,i)=>{const x=L+20+Math.floor(i/rows)*cw,y=top+65+(i%rows)*rh;const label=item.value===null?'Não informado':item.value+'%';text(item.name,x,y,17,{bold:true,color:navyBlue,max:cw-135});text(label,x+cw-12,y,16,{bold:true,color:navyBlue,align:'right'});if(item.value!==null){const bw=cw-25;rounded(x,y+8,bw,12,5);ctx.fillStyle='#dedbea';ctx.fill();ctx.save();ctx.clip();const g=ctx.createLinearGradient(x,0,x+bw,0);g.addColorStop(0,'#ff574d');g.addColorStop(.5,'#ffbc32');g.addColorStop(1,'#ceff00');ctx.fillStyle=g;ctx.fillRect(x,y+8,bw*item.value/100,12);ctx.restore();}text(item.count+' registros fotográficos',x,y+35,13,{color:'#77758a'});});const totals=[['Atividades',projects.length],['Fotografias',report.pages.flat().filter(s=>s.image).length],['Concluídas',projects.filter(s=>s.value===100).length]];totals.forEach(([label,n],i)=>{const x=L+(R-L)*(i+.5)/3;text(String(n),x,top+chartH-45,28,{bold:true,color:navyBlue,align:'center'});text(label,x,top+chartH-20,16,{color:navyBlue,align:'center'});});
     }
 
     const bottom=1605;
