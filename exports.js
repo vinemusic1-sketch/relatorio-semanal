@@ -236,17 +236,14 @@ function wordPage(sheet,index) {
     '<w:spacing w:before="0" w:after="0" w:line="240" w:lineRule="auto"/><w:jc w:val="center"/></w:pPr>'+
     wordDrawing(id,width,height)+'</w:p>';
 }
-function wordDrawing(id,width,height,formBackground=false) {
+function wordDrawing(id,width,height) {
   const size='cx="'+width+'" cy="'+height+'"';
-  const frame=formBackground
-    ? '<wp:anchor distT="0" distB="0" distL="0" distR="0" simplePos="0" relativeHeight="0" behindDoc="1" locked="1" layoutInCell="0" allowOverlap="1"><wp:simplePos x="0" y="0"/><wp:positionH relativeFrom="page"><wp:align>center</wp:align></wp:positionH><wp:positionV relativeFrom="paragraph"><wp:posOffset>304800</wp:posOffset></wp:positionV><wp:extent '+size+'/><wp:effectExtent l="0" t="0" r="0" b="0"/><wp:wrapNone/>'
-    : '<wp:inline distT="0" distB="0" distL="0" distR="0"><wp:extent '+size+'/>';
-  return '<w:r><w:drawing>'+frame+
+  return '<w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0"><wp:extent '+size+'/>'+
     '<wp:docPr id="'+id+'" name="Imagem '+id+'"/><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">'+
     '<pic:pic><pic:nvPicPr><pic:cNvPr id="'+id+'" name="Imagem '+id+'"/><pic:cNvPicPr/></pic:nvPicPr>'+
     '<pic:blipFill><a:blip r:embed="rId'+id+'"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>'+
     '<pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext '+size+'/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom>'+
-    '</pic:spPr></pic:pic></a:graphicData></a:graphic>'+(formBackground?'</wp:anchor>':'</wp:inline>')+'</w:drawing></w:r>';
+    '</pic:spPr></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r>';
 }
 export function makeWord(sheets,pageImages,name) {
   const files = {}, links=[];
@@ -314,54 +311,16 @@ export function makeEditableWord(report,period,dateFormat,name) {
     [{text:labels.evidence,bold:true},{text:evidenceText(field('evidence')),span:3}],
     [{text:labels.summary+' '+field('summary'),span:2},{text:'Período: '+period,span:2}]
   ];
-  const formSize=formRowHeights.reduce((sum,height)=>sum+height,0);
-  const formCanvas=document.createElement('canvas');
-  formCanvas.width=1000;
-  formCanvas.height=formSize/10;
-  const formContext=formCanvas.getContext('2d');
-  formContext.strokeStyle='#190A60';
-  formContext.lineWidth=2;
-  formContext.beginPath();
-  formContext.roundRect(1,1,998,formCanvas.height-2,14);
-  formContext.save();
-  formContext.clip();
-  let rowTop=0;
-  for (const [index,row] of formRows.entries()) {
-    const height=formRowHeights[index]/10;
-    let column=0, x=0;
-    for (const entry of row.slice(0,-1)) {
-      const next=column+(entry.span||1);
-      x+=formWidths.slice(column,next).reduce((sum,width)=>sum+width,0)/10;
-      column=next;
-      formContext.beginPath();
-      formContext.moveTo(x,rowTop);
-      formContext.lineTo(x,rowTop+height);
-      formContext.stroke();
-    }
-    rowTop+=height;
-    if (index<formRows.length-1) {
-      formContext.beginPath();
-      formContext.moveTo(0,rowTop);
-      formContext.lineTo(1000,rowTop);
-      formContext.stroke();
-    }
-  }
-  formContext.restore();
-  formContext.beginPath();
-  formContext.roundRect(1,1,998,formCanvas.height-2,14);
-  formContext.stroke();
-  const formId=links.length+1;
-  files['word/media/moldura-formulario.png']=jpeg(formCanvas.toDataURL('image/png'));
-  links.push(relationship('rId'+formId,'image','media/moldura-formulario.png'));
-  const formTitle='<w:p><w:pPr><w:spacing w:before="0" w:after="0" w:line="480" w:lineRule="exact"/><w:jc w:val="center"/></w:pPr>'+
-    wordDrawing(formId,6350000,formSize*635,true)+'<w:r><w:rPr><w:b/></w:rPr><w:t>FORMULÁRIO</w:t></w:r></w:p>';
-  const hiddenBorders=['top','left','bottom','right','insideH','insideV'].map(side=>'<w:'+side+' w:val="nil"/>').join('');
-  const formGrid='<w:tbl><w:tblPr><w:tblW w:type="dxa" w:w="10000"/><w:jc w:val="center"/><w:tblBorders>'+hiddenBorders+
+  const formTitle=paragraph('FORMULÁRIO',{bold:true});
+  const formBorders=['top','left','bottom','right','insideH','insideV'].map(side=>
+    '<w:'+side+' w:val="single" w:sz="6" w:color="190A60"/>'
+  ).join('');
+  const formGrid='<w:tbl><w:tblPr><w:tblW w:type="dxa" w:w="10000"/><w:jc w:val="center"/><w:tblBorders>'+formBorders+
     '</w:tblBorders><w:tblLayout w:type="fixed"/></w:tblPr><w:tblGrid>'+
     formWidths.map(width=>'<w:gridCol w:w="'+width+'"/>').join('')+'</w:tblGrid>'+
     formRows.map((row,index)=>{
       let column=0;
-      return '<w:tr><w:trPr><w:cantSplit/><w:trHeight w:val="'+formRowHeights[index]+'" w:hRule="exact"/></w:trPr>'+
+      return '<w:tr><w:trPr><w:cantSplit/><w:trHeight w:val="'+formRowHeights[index]+'" w:hRule="atLeast"/></w:trPr>'+
         row.map(entry=>{
           const span=entry.span||1;
           const width=formWidths.slice(column,column+span).reduce((sum,value)=>sum+value,0);
